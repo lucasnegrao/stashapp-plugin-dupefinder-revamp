@@ -31,12 +31,14 @@
       totalCount,
       includedCount,
       itemLabel,
-      actionLabel,
-      actionColor,
-      onRun,
       note,
-      isDisabled,
     } = config;
+    const actions = config.actions || [{
+      label: config.actionLabel,
+      color: config.actionColor,
+      onRun: config.onRun,
+      isDisabled: config.isDisabled,
+    }];
 
     const bar = ui.el("div", STYLE.batchBar);
     const summary = includedCount
@@ -46,21 +48,23 @@
     bar.appendChild(ui.el("div", "color:#5c6370;font-size:0.8em;", note || "Exclude items you want to skip, then run the batch action."));
     bar.appendChild(ui.el("span", "flex:1;"));
 
-    const runBtn = ui.mkBtn(actionLabel, actionColor, async () => {
-      const original = runBtn.textContent;
-      runBtn.textContent = "Running…";
-      runBtn.disabled = true;
-      try {
-        await onRun();
-      } finally {
-        if (document.body.contains(runBtn)) {
-          runBtn.textContent = original;
-          runBtn.disabled = isDisabled();
+    actions.forEach(action => {
+      const runBtn = ui.mkBtn(action.label, action.color, async () => {
+        const original = runBtn.textContent;
+        runBtn.textContent = "Running…";
+        runBtn.disabled = true;
+        try {
+          await action.onRun();
+        } finally {
+          if (document.body.contains(runBtn)) {
+            runBtn.textContent = original;
+            runBtn.disabled = action.isDisabled();
+          }
         }
-      }
+      });
+      runBtn.disabled = action.isDisabled();
+      bar.appendChild(runBtn);
     });
-    runBtn.disabled = isDisabled();
-    bar.appendChild(runBtn);
     return bar;
   }
 
@@ -198,14 +202,15 @@
 
     const wrap = document.createElement("div");
     wrap.appendChild(ui.el("div", "color:#5c6370;font-size:0.83em;margin-bottom:6px;", `${scenes.length} scene${scenes.length !== 1 ? "s" : ""} with multiple files`));
-    wrap.appendChild(ui.el("div", STYLE.rowHint, "Click any row to choose which file to keep."));
+    wrap.appendChild(ui.el("div", STYLE.rowHint, "Click a row to choose which file to keep; click the selected row again to clear it."));
 
     for (const scene of scenes) {
       const sceneWrap = document.createElement("div");
-      const selectedFile = getSelectedFile(scene);
       const sorted = [...scene.files].sort((a, b) => analysis.compareFiles(a, b, settings));
-      const keeper = selectedFile || sorted[0];
-      const extraFiles = sorted.filter(f => helpers.idKey(f.id) !== helpers.idKey(keeper.id));
+      const keeper = getSelectedFile(scene);
+      const extraFiles = keeper
+        ? sorted.filter(f => helpers.idKey(f.id) !== helpers.idKey(keeper.id))
+        : sorted;
       const included = isSceneIncluded(scene);
       const hasDurationMismatch = analysis.hasLargeDurationMismatch(scene, settings);
       const durationDiffSeconds = Math.round(analysis.sceneDurationDiffSeconds(scene));
@@ -234,7 +239,7 @@
         keepBtn.style.opacity = keepBtn.disabled ? "0.6" : "1";
         hdr.appendChild(keepBtn);
         const splitBtn = ui.mkBtn(dryRun ? "👁 Preview split" : "✂ Split", "#c678dd", async () => onSplitScene(scene));
-        splitBtn.disabled = !keeper || !extraFiles.length;
+        splitBtn.disabled = extraFiles.length < (keeper ? 1 : 2);
         splitBtn.style.opacity = splitBtn.disabled ? "0.6" : "1";
         hdr.appendChild(splitBtn);
       }
@@ -247,7 +252,7 @@
         const selected = keeper && helpers.idKey(file.id) === helpers.idKey(keeper.id);
         const tr = document.createElement("tr");
         tr.style.cssText = `background:${selected ? "rgba(152,195,121,0.16)" : "rgba(224,108,117,0.06)"};cursor:pointer;`;
-        tr.title = "Click to keep this file";
+        tr.title = selected ? "Click again to clear the keep selection" : "Click to keep this file";
         tr.addEventListener("click", () => onSelectFile(scene.id, file.id));
 
         const actionsTd = ui.el("td", STYLE.td + "white-space:nowrap;");

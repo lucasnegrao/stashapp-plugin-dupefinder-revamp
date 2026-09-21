@@ -8,7 +8,7 @@ A [Stash](https://github.com/stashapp/stash) plugin that finds duplicate scenes 
 
 - **Duplicate detection modes** — switch between pHash-first matching with a legacy fallback pass only for scenes without pHash, or legacy-only title/date/studio matching
 - **Multi-file scene detection** — finds scenes that have more than one file attached
-- **Click-to-keep selection** — click any file row or duplicate-scene row to choose exactly what should be kept
+- **Click-to-keep selection** — click any file row or duplicate-scene row to choose exactly what should be kept; click a selected multi-file row again to clear its keep selection
 - **Consistent keep labeling** — the selected keeper is always marked **keep** so the UI reflects your choice
 - **Batch mode for both tabs** — exclude any scene/group from the batch, then apply keep or merge to everything still included
 - **Safer batch defaults** — multi-file scenes and duplicate groups with large duration diffs start excluded from batch mode until you explicitly confirm them
@@ -16,7 +16,7 @@ A [Stash](https://github.com/stashapp/stash) plugin that finds duplicate scenes 
 - **Settings modal** — configure legacy fallback distance, best-selection algorithm, maximum duration difference, and additional behavior toggles
 - **Stable table layout** — fixed-width columns on both tabs with Actions first, plus pHash on both tables and Duration in duplicates
 - **Keep selected file cleanup** — in the Multi-file tab, keep the selected file and delete the rest without deleting the scene
-- **Split multi-file scenes** — unmerge a scene by keeping the selected file on the original scene and moving each other file into its own new scene
+- **Split multi-file scenes** — keep the selected file on the original scene and move every other file into a scene without copied metadata, or clear the keep selection so no file reuses the original metadata
 - **Merge duplicates into selected keep** — in the Duplicates tab, combine metadata into the selected keep scene and delete every non-keeper scene and its files
 - **Dry run / preview mode** — preview cleanup, merge, and batch actions before anything destructive happens
 - **Batch progress + abort** — batch runs lock the modal, show progress, and can abort the remaining items without undoing completed actions
@@ -53,8 +53,9 @@ Lists every scene that has more than one file attached, sorted by file count. Cl
 Available actions:
 - **🧹 Keep** — keeps the currently selected file, safely makes it the scene's primary file if needed, and deletes the other files from disk
 - **✂ Split** — keeps the selected file on the current scene and creates new scenes for the remaining files using copied scene metadata
-- In **Batch mode**, exclude any scenes you want to skip, then run **Keep selected in batch** to apply the chosen keep file across all included scenes
+- In **Batch mode**, exclude any scenes you want to skip, then run **Keep** or **Split** across the eligible included scenes
 - Scenes whose file durations differ by more than the configured safety threshold start **Excluded** in batch mode and ask for confirmation before being re-added
+- Clicking the selected keep file again clears the selection. **Keep** is then disabled for that scene, while **Split** creates a new scene without copied metadata for every file and removes the original scene and its metadata.
 - In **Dry run / preview mode**, these actions show what would be kept or deleted without making changes
 
 ### Duplicates tab
@@ -62,7 +63,7 @@ Lists groups of scenes using the selected duplicate finder mode. In **pHash** mo
 
 Available actions:
 - **⚡ Merge** — combines metadata into the currently selected keep scene, then deletes every non-keeper scene and its files from disk; the keep scene's existing files are preserved
-- In **Batch mode**, exclude any groups you want to skip, then run **Merge selected in batch** to process all included groups
+- In **Batch mode**, exclude any groups you want to skip, then run **Merge** to process all included groups
 - Unsafe groups (large duration differences) can start excluded in batch mode and require explicit confirmation before inclusion
 - While a batch is running, the modal shows progress, disables other interactions, and lets you abort the remaining items only
 - In **Dry run / preview mode**, merge and batch actions preview the destination keeper plus every source scene and file that would be removed

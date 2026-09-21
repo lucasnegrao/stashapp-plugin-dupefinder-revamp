@@ -205,8 +205,8 @@
       };
     }
 
-    function refreshSplitSceneState(updatedScene, createdScenes) {
-      const sceneKey = helpers.idKey(updatedScene.id);
+    function refreshSplitSceneState(originalSceneId, updatedScene, createdScenes) {
+      const sceneKey = helpers.idKey(originalSceneId);
       const createdKeys = new Set((createdScenes || []).map(scene => helpers.idKey(scene.id)));
       const nextScenes = [];
       state.allScenes.forEach(scene => {
@@ -215,7 +215,7 @@
           nextScenes.push(scene);
           return;
         }
-        nextScenes.push(updatedScene);
+        if (updatedScene) nextScenes.push(updatedScene);
       });
       state.allScenes = nextScenes.concat(createdScenes || []);
       delete state.multiKeepers[sceneKey];
@@ -236,12 +236,19 @@
       refreshMergedGroupState(group, mergedKeeper);
     }
 
-    async function executeSplitScene(scene, keeper, extraFiles) {
-      await api.setScenePrimaryFile(scene.id, keeper.id);
+    async function executeSplitScene(scene, keeper, splitFiles) {
+      if (keeper) {
+        await api.setScenePrimaryFile(scene.id, keeper.id);
+      } else if (splitFiles.length) {
+        // Move the temporary primary file last so the original scene remains valid
+        // until every other file has been assigned to its new scene.
+        await api.setScenePrimaryFile(scene.id, splitFiles[splitFiles.length - 1].id);
+      }
       const createdScenes = [];
       const failures = [];
       let updatedScene = scene;
-      for (const file of extraFiles) {
+      let originalRemoved = false;
+      for (const file of splitFiles) {
         let createdSceneId = null;
         let assigned = false;
         try {
@@ -250,7 +257,11 @@
           createdSceneId = created.id;
           await api.assignSceneFile(created.id, file.id);
           assigned = true;
-          createdScenes.push(await api.fetchScene(created.id));
+          try {
+            createdScenes.push(await api.fetchScene(created.id));
+          } catch (_) {
+            createdScenes.push({ ...created, files: [file] });
+          }
         } catch (error) {
           if (createdSceneId && !assigned) {
             try {
@@ -262,12 +273,25 @@
           failures.push(`${helpers.fileName(file)}: ${error.message}`);
         }
       }
-      try {
-        updatedScene = await api.fetchScene(scene.id);
-      } catch (error) {
-        updatedScene = { ...scene, files: [keeper] };
+
+      if (!keeper && !failures.length) {
+        try {
+          await api.destroyScene(scene.id, false);
+          originalRemoved = true;
+          updatedScene = null;
+        } catch (error) {
+          failures.push(`Original scene cleanup: ${error.message}`);
+        }
       }
-      refreshSplitSceneState(updatedScene, createdScenes);
+
+      if (!originalRemoved) {
+        try {
+          updatedScene = await api.fetchScene(scene.id);
+        } catch (_) {
+          updatedScene = keeper ? { ...scene, files: [keeper] } : scene;
+        }
+      }
+      refreshSplitSceneState(scene.id, updatedScene, createdScenes);
       if (failures.length) {
         throw new Error(`Split completed with ${failures.length} failure(s): ${failures.join(" | ")}`);
       }
@@ -278,7 +302,11 @@
       const extraFiles = keeper
         ? (scene.files || []).filter(file => helpers.idKey(file.id) !== helpers.idKey(keeper.id))
         : [];
-      if (!keeper || !extraFiles.length) {
+      if (!keeper) {
+        ui.toast(`Select a keep file for scene #${scene.id}`, "#56b6c2");
+        return;
+      }
+      if (!extraFiles.length) {
         ui.toast(`Scene #${scene.id} already only has the selected keep file`, "#56b6c2");
         return;
       }
@@ -317,11 +345,11 @@
 
     async function runSplitScene(scene, withBusyOperation, updateBusyOperation, showTab) {
       const keeper = getSelectedMultiFile(scene);
-      const extraFiles = keeper
+      const splitFiles = keeper
         ? (scene.files || []).filter(file => helpers.idKey(file.id) !== helpers.idKey(keeper.id))
-        : [];
-      if (!keeper || !extraFiles.length) {
-        ui.toast(`Scene #${scene.id} already only has the selected keep file`, "#56b6c2");
+        : [...(scene.files || [])];
+      if (!splitFiles.length || (!keeper && splitFiles.length < 2)) {
+        ui.toast(`Scene #${scene.id} does not have enough files to split`, "#56b6c2");
         return;
       }
 
@@ -331,32 +359,42 @@
       }
 
       if (state.dryRun) {
-        ui.previewAction(`Split scene ${helpers.sceneName(scene)}`, [
-          `Original scene keeps: ${helpers.filePathLabel(keeper)}`,
-          "",
-          `Would create ${extraFiles.length} new scene(s):`,
-          ...extraFiles.map(file => `- ${helpers.filePathLabel(file)}`),
-        ]);
+        const lines = keeper
+          ? [
+              `Original scene keeps: ${helpers.filePathLabel(keeper)}`,
+              "",
+              `Would create ${splitFiles.length} new scene(s) without copied metadata:`,
+            ]
+          : [
+              "No keep file selected; the original scene and its metadata would be removed.",
+              "",
+              `Would create ${splitFiles.length} new scene(s) without copied metadata:`,
+            ];
+        ui.previewAction(`Split scene ${helpers.sceneName(scene)}`, lines.concat(
+          splitFiles.map(file => `- ${helpers.filePathLabel(file)}`)
+        ));
         return;
       }
 
-      if (!confirm(
-        `Split "${helpers.sceneName(scene)}" into ${extraFiles.length + 1} scene(s)?\n\n` +
-        `The current scene will keep:\n- ${helpers.fileName(keeper)}\n\n` +
-        `Each other file will become its own new scene with title set to the file name, no copied metadata, and organized disabled:\n${extraFiles.map(file => `- ${helpers.fileName(file)}`).join("\n")}`
-      )) return;
+      const confirmation = keeper
+        ? `Split "${helpers.sceneName(scene)}" into ${splitFiles.length + 1} scene(s)?\n\n` +
+          `The current scene will keep:\n- ${helpers.fileName(keeper)}\n\n` +
+          `Each other file will become its own new scene with no copied metadata:\n${splitFiles.map(file => `- ${helpers.fileName(file)}`).join("\n")}`
+        : `Split every file from "${helpers.sceneName(scene)}" into ${splitFiles.length} new scenes?\n\n` +
+          `No keep file is selected. The original scene and its metadata will be removed, and every file will become a new scene with no copied metadata:\n${splitFiles.map(file => `- ${helpers.fileName(file)}`).join("\n")}`;
+      if (!confirm(confirmation)) return;
 
       try {
         await withBusyOperation({
           label: "Splitting multi-file scene…",
           detail: `Scene #${scene.id} ${helpers.sceneName(scene)}`,
-          total: extraFiles.length,
+          total: splitFiles.length,
         }, async () => {
-          await executeSplitScene(scene, keeper, extraFiles);
-          updateBusyOperation({ completed: extraFiles.length });
+          await executeSplitScene(scene, keeper, splitFiles);
+          updateBusyOperation({ completed: splitFiles.length });
         });
         await showTab(state.currentTab);
-        ui.toast(`Split scene #${scene.id} into ${extraFiles.length + 1} scene(s)`, "#c678dd");
+        ui.toast(`Split scene #${scene.id} into ${splitFiles.length + (keeper ? 1 : 0)} scene(s)`, "#c678dd");
       } catch (e) {
         ui.toast(`Split error: ${e.message}`, "#e06c75");
       }
@@ -421,9 +459,13 @@
       overlay.appendChild(modal);
 
       const header = ui.el("div", STYLE.header);
-      const titleEl = ui.el("span", "color:#e5c07b;font-weight:700;font-size:1.1em;", "🔍 DupeFinder");
-      const controls = ui.el("div", "display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-left:auto;");
-      const headerSelectStyle = "background:#2c313a;border:1px solid #3e4451;color:#abb2bf;border-radius:4px;padding:5px 7px;font-size:0.82em;";
+      header.style.display = "grid";
+      header.style.gridTemplateColumns = "minmax(0,1fr) auto minmax(0,1fr)";
+      header.style.alignItems = "center";
+      const titleEl = ui.el("span", "color:#e5c07b;font-weight:700;font-size:1.1em;justify-self:start;align-self:center;white-space:nowrap;", "🔍 DupeFinder");
+      const controls = ui.el("div", "display:flex;align-items:center;align-self:center;justify-content:center;gap:18px;flex-wrap:nowrap;");
+      const headerActions = ui.el("div", "display:flex;align-items:center;align-self:center;justify-self:end;gap:10px;");
+      const headerSelectStyle = "box-sizing:border-box;width:110px;height:38px;background:#2c313a;border:1px solid #3e4451;color:#abb2bf;border-radius:4px;padding:0 10px;font-size:0.85em;";
 
       const duplicateModeSelect = document.createElement("select");
       [
@@ -449,7 +491,7 @@
       phashDistanceSelect.setAttribute("aria-label", "pHash distance");
 
       function headerSelect(label, select) {
-        const wrap = ui.el("label", "display:flex;align-items:center;gap:5px;color:#abb2bf;font-size:0.8em;white-space:nowrap;");
+        const wrap = ui.el("label", "display:flex;align-items:center;height:38px;gap:8px;color:#abb2bf;font-size:0.85em;white-space:nowrap;margin:0;");
         wrap.appendChild(document.createTextNode(label));
         wrap.appendChild(select);
         return wrap;
@@ -499,6 +541,7 @@
 
       const closeBtn = ui.mkBtn("✕", "#3e4451", () => overlay.remove());
       closeBtn.setAttribute("aria-label", "Close DupeFinder");
+      closeBtn.title = "Close";
       const settingsBtn = ui.mkBtn("⚙", "#56b6c2", () => {
         if (settingsOverlay && settingsOverlay.isConnected) return;
         settingsOverlay = tables.renderSettingsModal({
@@ -518,9 +561,18 @@
       });
       settingsBtn.title = "Settings";
       settingsBtn.setAttribute("aria-label", "Open DupeFinder settings");
-      settingsBtn.style.fontSize = "1.35em";
-      settingsBtn.style.lineHeight = "1";
-      settingsBtn.style.padding = "5px 11px";
+      [settingsBtn, closeBtn].forEach(btn => {
+        btn.style.display = "inline-flex";
+        btn.style.alignItems = "center";
+        btn.style.justifyContent = "center";
+        btn.style.boxSizing = "border-box";
+        btn.style.width = "38px";
+        btn.style.height = "38px";
+        btn.style.padding = "0";
+        btn.style.lineHeight = "1";
+      });
+      settingsBtn.style.fontSize = "1.3em";
+      closeBtn.style.fontSize = "1em";
       modal.appendChild(header);
       header.appendChild(titleEl);
 
@@ -633,8 +685,8 @@
         }
       }
 
-      async function runMultiBatch() {
-        const plans = state.multiFileScenes
+      function multiKeepBatchPlans() {
+        return state.multiFileScenes
           .filter(scene => isSceneBatchIncluded(scene))
           .map(scene => {
             const keeper = getSelectedMultiFile(scene);
@@ -645,9 +697,26 @@
             };
           })
           .filter(plan => plan.keeper && plan.extraFiles.length);
+      }
+
+      function multiSplitBatchPlans() {
+        return state.multiFileScenes
+          .filter(scene => isSceneBatchIncluded(scene))
+          .map(scene => {
+            const keeper = getSelectedMultiFile(scene);
+            const splitFiles = keeper
+              ? (scene.files || []).filter(file => helpers.idKey(file.id) !== helpers.idKey(keeper.id))
+              : [...(scene.files || [])];
+            return { scene, keeper, splitFiles };
+          })
+          .filter(plan => plan.splitFiles.length >= (plan.keeper ? 1 : 2));
+      }
+
+      async function runMultiKeepBatch() {
+        const plans = multiKeepBatchPlans();
 
         if (!plans.length) {
-          ui.toast("No multi-file scenes are currently included in the batch", "#56b6c2");
+          ui.toast("No included multi-file scenes have a selected keep file", "#56b6c2");
           return;
         }
 
@@ -691,6 +760,69 @@
         } catch (e) {
           showTab(state.currentTab);
           ui.toast(`Batch keep error: ${e.message}`, "#e06c75");
+        }
+      }
+
+      async function runMultiSplitBatch() {
+        const plans = multiSplitBatchPlans();
+        if (!plans.length) {
+          ui.toast("No multi-file scenes are currently available to split in the batch", "#56b6c2");
+          return;
+        }
+
+        if (!(await api.canSplitScenes())) {
+          ui.toast("Split requires a Stash server that supports sceneCreate and sceneAssignFile.", "#e06c75");
+          return;
+        }
+
+        if (state.dryRun) {
+          const lines = [];
+          plans.forEach(plan => {
+            lines.push(`Scene #${plan.scene.id} ${helpers.sceneName(plan.scene)}`);
+            if (plan.keeper) lines.push(`Original keeps: ${helpers.filePathLabel(plan.keeper)}`);
+            else lines.push("No keep selected: remove the original scene and its metadata");
+            lines.push(`Create ${plan.splitFiles.length} scene(s) without copied metadata:`);
+            plan.splitFiles.forEach(file => lines.push(`- ${helpers.filePathLabel(file)}`));
+            lines.push("");
+          });
+          ui.previewAction(`Batch split for ${plans.length} scene(s)`, lines);
+          return;
+        }
+
+        const newSceneCount = plans.reduce((count, plan) => count + plan.splitFiles.length, 0);
+        const removedOriginalCount = plans.filter(plan => !plan.keeper).length;
+        const removalWarning = removedOriginalCount
+          ? ` ${removedOriginalCount} original scene(s) with no keep selection and their metadata will be removed.`
+          : "";
+        if (!confirm(
+          `Split ${plans.length} multi-file scene(s) into individual files?\n\n` +
+          `This will create ${newSceneCount} new scene(s) without copied metadata.${removalWarning}`
+        )) return;
+
+        try {
+          let completed = 0;
+          let aborted = false;
+          await withBusyOperation({
+            label: "Running batch split…",
+            total: plans.length,
+            abortable: true,
+            warning: "Aborting only stops after the current scene finishes. Scenes already split are not restored.",
+          }, async () => {
+            for (const plan of plans) {
+              if (state.operation.abortRequested) break;
+              updateBusyOperation({ detail: `Scene #${plan.scene.id} ${helpers.sceneName(plan.scene)}`, completed });
+              await executeSplitScene(plan.scene, plan.keeper, plan.splitFiles);
+              completed++;
+              updateBusyOperation({ completed });
+            }
+            aborted = state.operation.abortRequested;
+          });
+          showTab(state.currentTab);
+          if (aborted) ui.toast(`Batch split aborted after ${completed} of ${plans.length} scene(s). Completed splits were not undone.`, "#e5c07b");
+          else ui.toast(`Split ${completed} multi-file scene(s)`, "#c678dd");
+        } catch (e) {
+          showTab(state.currentTab);
+          ui.toast(`Batch split error: ${e.message}`, "#e06c75");
         }
       }
 
@@ -783,13 +915,23 @@
               totalCount: state.multiFileScenes.length,
               includedCount,
               itemLabel: `scene${state.multiFileScenes.length === 1 ? "" : "s"}`,
-              actionLabel: state.dryRun ? "👁 Preview batch keep" : "🧹 Keep selected in batch",
-              actionColor: "#98c379",
-              onRun: runMultiBatch,
+              actions: [
+                {
+                  label: state.dryRun ? "👁 Preview keep" : "🧹 Keep",
+                  color: "#98c379",
+                  onRun: runMultiKeepBatch,
+                  isDisabled: () => multiKeepBatchPlans().length === 0,
+                },
+                {
+                  label: state.dryRun ? "👁 Preview split" : "✂ Split",
+                  color: "#c678dd",
+                  onRun: runMultiSplitBatch,
+                  isDisabled: () => multiSplitBatchPlans().length === 0,
+                },
+              ],
               note: state.multiFileScenes.some(scene => analysis.hasLargeDurationMismatch(scene, state.settings))
                 ? `Scenes exceeding the ${helpers.durationDiffLimitLabel(state.settings.batchDurationDiffSeconds)} maximum duration difference start excluded from the batch.`
                 : "Exclude items you want to skip, then run the batch action.",
-              isDisabled: () => state.multiFileScenes.filter(scene => isSceneBatchIncluded(scene)).length === 0,
             }));
           }
 
@@ -800,7 +942,12 @@
             isSceneIncluded: isSceneBatchIncluded,
             getSelectedFile: getSelectedMultiFile,
             onSelectFile(sceneId, fileId) {
-              state.multiKeepers[helpers.idKey(sceneId)] = helpers.idKey(fileId);
+              const sceneKey = helpers.idKey(sceneId);
+              const selected = state.multiFileScenes.find(scene => helpers.idKey(scene.id) === sceneKey);
+              const current = selected && getSelectedMultiFile(selected);
+              state.multiKeepers[sceneKey] = current && helpers.idKey(current.id) === helpers.idKey(fileId)
+                ? null
+                : helpers.idKey(fileId);
               showTab(state.currentTab);
             },
             onToggleSceneBatch(sceneId) {
@@ -815,7 +962,7 @@
                   state.multiBatchForcedIncluded.delete(key);
                 } else {
                   const durationDiffSeconds = Math.round(analysis.sceneDurationDiffSeconds(scene));
-                  if (!confirm(`This scene has file durations that differ by about ${durationDiffSeconds}s, so it starts excluded from batch mode.\n\nAdd it to the batch anyway?\n\nBatch keep will still delete the non-selected files if you continue.`)) return;
+                  if (!confirm(`This scene has file durations that differ by about ${durationDiffSeconds}s, so it starts excluded from batch mode.\n\nAdd it to the batch anyway?\n\nThe selected batch action may still delete or reassign files if you continue.`)) return;
                   state.multiBatchExcluded.delete(key);
                   state.multiBatchForcedIncluded.add(key);
                 }
@@ -845,7 +992,7 @@
               totalCount: state.dupGroups.length,
               includedCount,
               itemLabel: `group${state.dupGroups.length === 1 ? "" : "s"}`,
-              actionLabel: state.dryRun ? "👁 Preview batch merge" : "⚡ Merge selected in batch",
+              actionLabel: state.dryRun ? "👁 Preview merge" : "⚡ Merge",
               actionColor: "#61afef",
               onRun: runDuplicateBatch,
               note: state.settings.autoExcludeDuplicateUnsafe && state.dupGroups.some(group => isGroupUnsafe(group))
@@ -903,7 +1050,10 @@
         btn.style.border = "1px solid #5c6370";
         btn.style.fontWeight = "700";
         btn.style.letterSpacing = "0.04em";
-        btn.style.padding = "6px 10px";
+        btn.style.boxSizing = "border-box";
+        btn.style.width = "110px";
+        btn.style.height = "38px";
+        btn.style.padding = "0 10px";
 
         function sync() {
           const active = getValue();
@@ -935,9 +1085,10 @@
       controls.appendChild(phashDistanceControl);
       controls.appendChild(previewBtn);
       controls.appendChild(batchBtn);
-      controls.appendChild(settingsBtn);
-      controls.appendChild(closeBtn);
+      headerActions.appendChild(settingsBtn);
+      headerActions.appendChild(closeBtn);
       header.appendChild(controls);
+      header.appendChild(headerActions);
       updateTitle();
 
       api.fetchAllScenes((loadedCount, total) => {
@@ -955,6 +1106,9 @@
     }
 
     function reactTreeContainsRoute(React, node, route) {
+      if (Array.isArray(node)) {
+        return React.Children.toArray(node).some(child => reactTreeContainsRoute(React, child, route));
+      }
       if (!React.isValidElement(node)) return false;
       if (node.props && (node.props.to === route || node.props.href === route)) return true;
       return [node.props && node.props.children, node.props && node.props.heading]
