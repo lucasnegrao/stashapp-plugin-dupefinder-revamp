@@ -462,7 +462,7 @@
       header.style.display = "grid";
       header.style.gridTemplateColumns = "minmax(0,1fr) auto minmax(0,1fr)";
       header.style.alignItems = "center";
-      const titleEl = ui.el("span", "color:#e5c07b;font-weight:700;font-size:1.1em;justify-self:start;align-self:center;white-space:nowrap;", `${constants.PRODUCT_ICON} ${constants.PRODUCT_NAME}`);
+      const titleEl = ui.el("span", "color:#e5c07b;font-weight:700;font-size:1.1em;justify-self:start;align-self:center;white-space:nowrap;display:inline-flex;align-items:center;gap:8px;");
       const controls = ui.el("div", "display:flex;align-items:center;align-self:center;justify-content:center;gap:18px;flex-wrap:nowrap;");
       const headerActions = ui.el("div", "display:flex;align-items:center;align-self:center;justify-self:end;gap:10px;");
       const headerSelectStyle = "box-sizing:border-box;width:110px;height:38px;background:#2c313a;border:1px solid #3e4451;color:#abb2bf;border-radius:4px;padding:0 10px;font-size:0.8em;";
@@ -618,8 +618,12 @@
       modal.appendChild(busyOverlay);
 
       function updateTitle() {
-        const productTitle = `${constants.PRODUCT_ICON} ${constants.PRODUCT_NAME}`;
-        titleEl.textContent = state.batchMode ? `${productTitle} — ${state.currentTab === "multi" ? "Multi-file" : "Duplicates"} batch mode` : productTitle;
+        titleEl.innerHTML = "";
+        const icon = ui.el("span", "font-size:1.65em;line-height:0.8;font-weight:400;", constants.PRODUCT_ICON);
+        const label = state.batchMode
+          ? `${constants.PRODUCT_NAME} — ${state.currentTab === "multi" ? "Multi-file" : "Duplicates"} batch mode`
+          : constants.PRODUCT_NAME;
+        titleEl.append(icon, document.createTextNode(label));
       }
 
       function renderBusyState() {
@@ -1132,8 +1136,6 @@
 
       const React = pluginApi.React;
       const { Button } = pluginApi.libraries.Bootstrap;
-      const { FontAwesomeIcon } = pluginApi.libraries.ReactFontAwesome;
-      const { faLayerGroup } = pluginApi.libraries.FontAwesomeSolid;
       let defaultInitializationStarted = false;
 
       function HeaderLauncher() {
@@ -1168,7 +1170,10 @@
           onClick: openModal,
           title: `Open ${constants.PRODUCT_NAME}`,
           "aria-label": `Open ${constants.PRODUCT_NAME}`,
-        }, React.createElement(FontAwesomeIcon, { icon: faLayerGroup, className: "fa-icon" }));
+        }, React.createElement("span", {
+          "aria-hidden": "true",
+          style: { fontSize: "1.35rem", lineHeight: 1, fontWeight: 400 },
+        }, constants.PRODUCT_ICON));
       }
 
       pluginApi.patch.before("MainNavBar.UtilityItems", props => [{
