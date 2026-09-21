@@ -79,9 +79,16 @@
     const distanceInput = document.createElement("input");
     distanceInput.type = "number";
     distanceInput.min = "0";
-    distanceInput.max = "10";
-    distanceInput.value = String(settings.defaultDistance);
+    distanceInput.max = "64";
+    distanceInput.value = String(settings.phashDistance);
     distanceInput.style.cssText = "width:100%;background:#21252b;border:1px solid #3e4451;color:#abb2bf;border-radius:4px;padding:6px;";
+
+    const legacyDistanceInput = document.createElement("input");
+    legacyDistanceInput.type = "number";
+    legacyDistanceInput.min = "0";
+    legacyDistanceInput.max = "10";
+    legacyDistanceInput.value = String(settings.legacyDistance);
+    legacyDistanceInput.style.cssText = distanceInput.style.cssText;
 
     const algoSelect = document.createElement("select");
     ["balanced", "quality", "size"].forEach(option => {
@@ -116,7 +123,8 @@
       return wrap;
     }
 
-    form.appendChild(field("Default distance", distanceInput, "Levenshtein title distance for duplicate grouping. 0 means strict title matching; higher values broaden title-only and same-meta title matching."));
+    form.appendChild(field("pHash distance", distanceInput, "Maximum Hamming distance for pHash duplicate grouping. Lower values are stricter."));
+    form.appendChild(field("Legacy title distance", legacyDistanceInput, "Used only when a scene has no pHash. 0 means strict title matching; higher values broaden title-only and same-meta title matching."));
     form.appendChild(field("Best algorithm", algoSelect, "balanced/quality/size ranking for keep selection."));
     form.appendChild(field("Batch duration safety (seconds)", batchDiffInput, "Unsafe groups/scenes start excluded when diff exceeds this."));
 
@@ -137,16 +145,17 @@
 
     const actions = ui.el("div", "display:flex;gap:8px;justify-content:flex-end;margin-top:12px;");
     const cancelBtn = ui.mkBtn("Close", "#5c6370", onClose);
-    const resetBtn = ui.mkBtn("Reset defaults", "#e5c07b", () => {
-      onReset();
+    const resetBtn = ui.mkBtn("Reset defaults", "#e5c07b", async () => {
+      await onReset();
       onClose();
     });
     resetBtn.style.color = "#21252b";
-    const saveBtn = ui.mkBtn("Save", "#98c379", () => {
+    const saveBtn = ui.mkBtn("Save", "#98c379", async () => {
       errEl.style.display = "none";
       try {
-        onSave({
-          defaultDistance: Number(distanceInput.value),
+        await onSave({
+          phashDistance: Number(distanceInput.value),
+          legacyDistance: Number(legacyDistanceInput.value),
           bestAlgorithm: algoSelect.value,
           batchDurationDiffSeconds: Number(batchDiffInput.value),
           autoExcludeDuplicateUnsafe: unsafeBox.checked,
@@ -175,6 +184,7 @@
       onSelectFile,
       onToggleSceneBatch,
       onKeepScene,
+      onSplitScene,
       onDeleteScene,
     } = opts;
 
@@ -226,12 +236,17 @@
         tr.addEventListener("click", () => onSelectFile(scene.id, file.id));
 
         const actionsTd = ui.el("td", STYLE.td + "white-space:normal;");
-        const selectBtn = ui.mkBtn(selected ? "✓ Selected" : "Keep this", selected ? "#98c379" : "#56b6c2", () => onSelectFile(scene.id, file.id));
+        const selectBtn = ui.mkBtn("Keep this", selected ? "#98c379" : "#56b6c2", () => onSelectFile(scene.id, file.id));
+        selectBtn.setAttribute("aria-pressed", selected ? "true" : "false");
+        selectBtn.title = selected ? "Currently selected keep file" : "Choose this file to keep";
         actionsTd.appendChild(selectBtn);
         if (selected && !batchMode && extraFiles.length) {
           const keepBtn = ui.mkBtn(dryRun ? "👁 Preview keep" : "🧹 Keep", "#98c379", async () => onKeepScene(scene));
           keepBtn.style.marginLeft = "6px";
           actionsTd.appendChild(keepBtn);
+          const splitBtn = ui.mkBtn(dryRun ? "👁 Preview split" : "✂ Split", "#c678dd", async () => onSplitScene(scene));
+          splitBtn.style.marginLeft = "6px";
+          actionsTd.appendChild(splitBtn);
           const delBtn = ui.mkBtn(dryRun ? "👁 Preview delete scene" : "🗑 Delete scene", "#e06c75", async () => onDeleteScene(scene));
           delBtn.style.marginLeft = "6px";
           actionsTd.appendChild(delBtn);
@@ -296,6 +311,7 @@
       const hdr = ui.el("div", STYLE.groupHdr);
       hdr.appendChild(ui.el("span", "font-size:1em;color:#e5c07b;font-weight:700;", (first.title || "(untitled)").trim()));
       hdr.appendChild(ui.el("span", STYLE.badge + "background:#c678dd;color:#fff;", `${group.scenes.length} scenes`));
+      hdr.appendChild(ui.el("span", STYLE.badge + `${group.method === "legacy" ? "background:#d19a66;color:#21252b;" : "background:#61afef;color:#21252b;"}`, group.method === "legacy" ? "Legacy" : "pHash"));
       if (unsafe) hdr.appendChild(ui.el("span", STYLE.badge + "background:#e5c07b;color:#21252b;", `Duration diff ${diff}s`));
       if (batchMode) hdr.appendChild(ui.el("span", STYLE.badge + `${included ? "background:#98c379;color:#21252b;" : "background:#5c6370;color:#fff;"}`, included ? "In batch" : "Excluded"));
       if (first.date) hdr.appendChild(ui.el("span", "color:#5c6370;font-size:0.85em;", first.date));
@@ -324,7 +340,9 @@
         tr.addEventListener("click", () => onSelectScene(group.key, scene.id));
 
         const actionsTd = ui.el("td", STYLE.td + "white-space:normal;");
-        const keepBtn = ui.mkBtn(isKeeper ? "✓ Selected" : "Keep this", isKeeper ? "#98c379" : "#56b6c2", () => onSelectScene(group.key, scene.id));
+        const keepBtn = ui.mkBtn("Keep this", isKeeper ? "#98c379" : "#56b6c2", () => onSelectScene(group.key, scene.id));
+        keepBtn.setAttribute("aria-pressed", isKeeper ? "true" : "false");
+        keepBtn.title = isKeeper ? "Currently selected keep scene" : "Choose this scene to keep";
         actionsTd.appendChild(keepBtn);
         if (isKeeper && !batchMode) {
           const mergeBtn = ui.mkBtn(dryRun ? "👁 Preview merge" : "⚡ Merge", "#61afef", async () => onMergeGroup(group));

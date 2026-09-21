@@ -11,7 +11,8 @@
 
   root.defaults = {
     settings: {
-      defaultDistance: 0,
+      phashDistance: 0,
+      legacyDistance: 0,
       bestAlgorithm: "balanced",
       batchDurationDiffSeconds: 10,
       autoExcludeDuplicateUnsafe: true,
@@ -132,10 +133,14 @@
       const number = Number(value);
       return Number.isFinite(number) ? number : null;
     },
-    readPhash(file) {
+    rawPhash(file) {
       const fps = (file && file.fingerprints) || [];
       const found = fps.find(fp => /phash/i.test((fp && fp.type) || ""));
-      return (found && found.value) || "—";
+      const value = found && found.value;
+      return value ? String(value).trim() : null;
+    },
+    readPhash(file) {
+      return this.rawPhash(file) || "—";
     },
     placeholder(value) {
       return value === undefined || value === null || value === "" ? "—" : String(value);
@@ -146,12 +151,14 @@
     normalize(raw) {
       const defaults = root.defaults.settings;
       const candidate = raw || {};
-      const distance = Number(candidate.defaultDistance);
+      const phashDistance = Number(candidate.phashDistance);
+      const legacyDistance = Number(candidate.legacyDistance !== undefined ? candidate.legacyDistance : candidate.defaultDistance);
       const threshold = Number(candidate.batchDurationDiffSeconds);
       const algo = String(candidate.bestAlgorithm || defaults.bestAlgorithm);
       const bestAlgorithm = ["balanced", "quality", "size"].includes(algo) ? algo : defaults.bestAlgorithm;
       return {
-        defaultDistance: Number.isFinite(distance) ? Math.max(0, Math.min(10, Math.round(distance))) : defaults.defaultDistance,
+        phashDistance: Number.isFinite(phashDistance) ? Math.max(0, Math.min(64, Math.round(phashDistance))) : defaults.phashDistance,
+        legacyDistance: Number.isFinite(legacyDistance) ? Math.max(0, Math.min(10, Math.round(legacyDistance))) : defaults.legacyDistance,
         bestAlgorithm,
         batchDurationDiffSeconds: Number.isFinite(threshold) ? Math.max(0, Math.min(3600, Math.round(threshold))) : defaults.batchDurationDiffSeconds,
         autoExcludeDuplicateUnsafe: candidate.autoExcludeDuplicateUnsafe !== undefined ? !!candidate.autoExcludeDuplicateUnsafe : defaults.autoExcludeDuplicateUnsafe,

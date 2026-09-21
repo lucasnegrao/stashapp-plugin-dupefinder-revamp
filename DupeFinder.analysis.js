@@ -2,6 +2,7 @@
   "use strict";
   const root = window.DupeFinder = window.DupeFinder || {};
   const { helpers, constants } = root;
+  const BIT_COUNTS = [0, 1, 1, 2, 1, 2, 2, 3, 1, 2, 2, 3, 2, 3, 3, 4];
 
   function codecScore(sceneOrFile) {
     const file = sceneOrFile && sceneOrFile.video_codec !== undefined
@@ -78,6 +79,30 @@
     })[0];
   }
 
+  function phashForScene(scene, settings) {
+    const sorted = [...(scene.files || [])].sort((a, b) => compareFiles(a, b, settings));
+    const withPhash = sorted.find(file => !!helpers.rawPhash(file));
+    return withPhash ? helpers.rawPhash(withPhash) : null;
+  }
+
+  function sceneHasPhash(scene, settings) {
+    return !!phashForScene(scene, settings);
+  }
+
+  function hammingDistance(a, b) {
+    const left = (a || "").trim().toLowerCase();
+    const right = (b || "").trim().toLowerCase();
+    if (!left || !right || left.length !== right.length) return null;
+    let distance = 0;
+    for (let i = 0; i < left.length; i++) {
+      const leftNibble = parseInt(left[i], 16);
+      const rightNibble = parseInt(right[i], 16);
+      if (Number.isNaN(leftNibble) || Number.isNaN(rightNibble)) return null;
+      distance += BIT_COUNTS[leftNibble ^ rightNibble];
+    }
+    return distance;
+  }
+
   function levenshtein(a, b) {
     if (a === b) return 0;
     if (!a) return b.length;
@@ -119,14 +144,30 @@
     if (hasMetaA !== hasMetaB) return false;
     if (hasMetaA) {
       if (aDate !== bDate || aStudio !== bStudio) return false;
-      if (aTitle && bTitle) return levenshtein(aTitle, bTitle) <= settings.defaultDistance;
+      if (aTitle && bTitle) return levenshtein(aTitle, bTitle) <= settings.legacyDistance;
       return true;
     }
     if (!aTitle || !bTitle) return false;
-    return levenshtein(aTitle, bTitle) <= settings.defaultDistance;
+    return levenshtein(aTitle, bTitle) <= settings.legacyDistance;
   }
 
-  function findDuplicateScenes(scenes, settings) {
+  function makeDuplicateGroup(cluster, method) {
+    return {
+      key: `${method}:${cluster.map(scene => helpers.idKey(scene.id)).sort().join(",")}`,
+      scenes: cluster,
+      method,
+    };
+  }
+
+  function sortDuplicateGroups(groups) {
+    return [...groups].sort((a, b) => {
+      const sizeDiff = b.scenes.length - a.scenes.length;
+      if (sizeDiff) return sizeDiff;
+      return a.key.localeCompare(b.key);
+    });
+  }
+
+  function findLegacyDuplicateScenes(scenes, settings) {
     const byMeta = new Map();
     scenes.forEach(scene => {
       const title = helpers.norm(scene.title);
@@ -172,19 +213,54 @@
 
       components.forEach(cluster => {
         if (cluster.length < 2) return;
-        const sample = cluster[0];
-        groups.push({
-          key: JSON.stringify([helpers.norm(sample.title), helpers.normDate(sample.date), helpers.norm(sample.studio ? sample.studio.name : ""), cluster.map(s => helpers.idKey(s.id)).sort().join(",")]),
-          scenes: cluster,
-        });
+        groups.push(makeDuplicateGroup(cluster, "legacy"));
       });
     });
 
-    return groups.sort((a, b) => {
-      const sizeDiff = b.scenes.length - a.scenes.length;
-      if (sizeDiff) return sizeDiff;
-      return a.key.localeCompare(b.key);
+    return sortDuplicateGroups(groups);
+  }
+
+  function findPhashDuplicateScenes(scenes, settings) {
+    const candidates = scenes
+      .map(scene => ({ scene, phash: phashForScene(scene, settings) }))
+      .filter(item => !!item.phash);
+    const n = candidates.length;
+    if (n < 2) return [];
+
+    const parent = Array.from({ length: n }, (_, index) => index);
+    const find = i => {
+      while (parent[i] !== i) {
+        parent[i] = parent[parent[i]];
+        i = parent[i];
+      }
+      return i;
+    };
+    const union = (a, b) => {
+      const pa = find(a);
+      const pb = find(b);
+      if (pa !== pb) parent[pb] = pa;
+    };
+
+    for (let i = 0; i < n; i++) {
+      for (let j = i + 1; j < n; j++) {
+        const distance = hammingDistance(candidates[i].phash, candidates[j].phash);
+        if (distance !== null && distance <= settings.phashDistance) union(i, j);
+      }
+    }
+
+    const components = new Map();
+    for (let i = 0; i < n; i++) {
+      const rootId = find(i);
+      if (!components.has(rootId)) components.set(rootId, []);
+      components.get(rootId).push(candidates[i].scene);
+    }
+
+    const groups = [];
+    components.forEach(cluster => {
+      if (cluster.length < 2) return;
+      groups.push(makeDuplicateGroup(cluster, "phash"));
     });
+    return sortDuplicateGroups(groups);
   }
 
   function findMultiFileScenes(scenes) {
@@ -215,9 +291,16 @@
     sceneDurationDiffSeconds,
     hasLargeDurationMismatch,
     bestScene,
-    findDuplicateScenes,
+    phashForScene,
+    sceneHasPhash,
+    hammingDistance,
+    findPhashDuplicateScenes,
+    findDuplicateScenes: findLegacyDuplicateScenes,
+    findLegacyDuplicateScenes,
     findMultiFileScenes,
     groupDurationDiffSeconds,
     hasUnsafeDuplicateGroup,
+    makeDuplicateGroup,
+    sortDuplicateGroups,
   };
 })();

@@ -2,7 +2,7 @@
   "use strict";
   const root = window.DupeFinder = window.DupeFinder || {};
 
-  const runtime = { supportsFingerprints: true };
+  const runtime = { supportsFingerprints: true, supportsSceneSplit: null };
   root.runtime = runtime;
 
   async function gql(query, variables) {
@@ -19,9 +19,12 @@
 
   function sceneFragment(includeFingerprints) {
     return `
-      id title date organized
-      studio { name }
-      performers { name }
+      id title code details director urls date production_date rating100 organized
+      studio { id name }
+      performers { id name }
+      tags { id name }
+      galleries { id }
+      groups { scene_index group { id name } }
       files {
         id path basename size video_codec height duration
         ${includeFingerprints ? "fingerprints { type value }" : ""}
@@ -94,10 +97,56 @@
     }
   }
 
+  async function canSplitScenes() {
+    if (runtime.supportsSceneSplit !== null) return runtime.supportsSceneSplit;
+    try {
+      const d = await gql(`
+        query SplitSupport {
+          __type(name: "Mutation") {
+            fields { name }
+          }
+        }
+      `);
+      const names = (((d || {}).__type || {}).fields || []).map(field => field.name);
+      runtime.supportsSceneSplit = names.includes("sceneCreate") && names.includes("sceneAssignFile");
+    } catch (_) {
+      runtime.supportsSceneSplit = false;
+    }
+    return runtime.supportsSceneSplit;
+  }
+
   root.api = {
     gql,
     fetchAllScenes,
     fetchScene,
+    canSplitScenes,
+    async fetchDuplicateSceneGroups(distance) {
+      try {
+        const d = await gql(`
+          query FindDuplicateScenes($distance: Int) {
+            findDuplicateScenes(distance: $distance) {
+              ${sceneFragment(runtime.supportsFingerprints)}
+            }
+          }
+        `, { distance: Number(distance) });
+        const groups = d.findDuplicateScenes || [];
+        return groups.map(group => Array.isArray(group) ? group : [group]);
+      } catch (error) {
+        if (runtime.supportsFingerprints && /fingerprints/i.test(String(error && error.message))) {
+          runtime.supportsFingerprints = false;
+          const d = await gql(`
+            query FindDuplicateScenes($distance: Int) {
+              findDuplicateScenes(distance: $distance) {
+                ${sceneFragment(false)}
+              }
+            }
+          `, { distance: Number(distance) });
+          const groups = d.findDuplicateScenes || [];
+          return groups.map(group => Array.isArray(group) ? group : [group]);
+        }
+        throw error;
+      }
+    },
     async destroyScene(id, deleteFile) {
       return gql(`
         mutation SceneDestroy($input: SceneDestroyInput!) {
@@ -125,6 +174,38 @@
           sceneUpdate(input: $input) { id }
         }
       `, { input: { id: String(sceneId), primary_file_id: String(fileId) } });
+    },
+    async createScene(input) {
+      try {
+        const d = await gql(`
+          mutation SceneCreate($input: SceneCreateInput!) {
+            sceneCreate(input: $input) {
+              ${sceneFragment(runtime.supportsFingerprints)}
+            }
+          }
+        `, { input });
+        return d.sceneCreate;
+      } catch (error) {
+        if (runtime.supportsFingerprints && /fingerprints/i.test(String(error && error.message))) {
+          runtime.supportsFingerprints = false;
+          const d = await gql(`
+            mutation SceneCreate($input: SceneCreateInput!) {
+              sceneCreate(input: $input) {
+                ${sceneFragment(false)}
+              }
+            }
+          `, { input });
+          return d.sceneCreate;
+        }
+        throw error;
+      }
+    },
+    async assignSceneFile(sceneId, fileId) {
+      return gql(`
+        mutation SceneAssignFile($input: AssignSceneFileInput!) {
+          sceneAssignFile(input: $input)
+        }
+      `, { input: { scene_id: String(sceneId), file_id: String(fileId) } });
     },
   };
 })();

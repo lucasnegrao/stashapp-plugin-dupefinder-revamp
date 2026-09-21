@@ -32,7 +32,47 @@
       },
       observer: null,
       scheduled: false,
+      duplicateGroupsDirty: true,
     };
+
+    function refreshMultiDerivedState() {
+      state.multiFileScenes = analysis.findMultiFileScenes(state.allScenes);
+
+      const validMultiIds = new Set(state.multiFileScenes.map(scene => helpers.idKey(scene.id)));
+      Object.keys(state.multiKeepers).forEach(sceneId => {
+        if (!validMultiIds.has(sceneId)) delete state.multiKeepers[sceneId];
+      });
+      state.multiFileScenes.forEach(scene => {
+        const selectedId = state.multiKeepers[helpers.idKey(scene.id)];
+        if (selectedId && !(scene.files || []).some(file => helpers.idKey(file.id) === selectedId)) {
+          delete state.multiKeepers[helpers.idKey(scene.id)];
+        }
+      });
+      state.multiBatchExcluded = new Set([...state.multiBatchExcluded].filter(sceneId => validMultiIds.has(sceneId)));
+      state.multiBatchForcedIncluded = new Set([...state.multiBatchForcedIncluded].filter(sceneId => {
+        const scene = state.multiFileScenes.find(item => helpers.idKey(item.id) === sceneId);
+        return scene && analysis.hasLargeDurationMismatch(scene, state.settings);
+      }));
+    }
+
+    function refreshDuplicateSelections() {
+      const dupMap = new Map(state.dupGroups.map(group => [group.key, group]));
+      Object.keys(state.duplicateKeepers).forEach(groupKey => {
+        const group = dupMap.get(groupKey);
+        if (!group || !group.scenes.some(scene => helpers.idKey(scene.id) === state.duplicateKeepers[groupKey])) {
+          delete state.duplicateKeepers[groupKey];
+        }
+      });
+      state.dupBatchExcluded = new Set([...state.dupBatchExcluded].filter(groupKey => dupMap.has(groupKey)));
+      state.dupBatchForcedIncluded = new Set([...state.dupBatchForcedIncluded].filter(groupKey => {
+        const group = dupMap.get(groupKey);
+        return group && isGroupUnsafe(group);
+      }));
+    }
+
+    function markDuplicateGroupsDirty() {
+      state.duplicateGroupsDirty = true;
+    }
 
     function getSelectedMultiFile(scene) {
       const selectedId = state.multiKeepers[helpers.idKey(scene.id)];
@@ -62,38 +102,29 @@
       return true;
     }
 
-    function refreshDerivedState() {
-      state.multiFileScenes = analysis.findMultiFileScenes(state.allScenes);
-      state.dupGroups = analysis.findDuplicateScenes(state.allScenes, state.settings);
+    async function refreshDuplicateGroups(force) {
+      if (!force && !state.duplicateGroupsDirty) return;
+      let phashGroups = [];
+      try {
+        const rawGroups = await api.fetchDuplicateSceneGroups(state.settings.phashDistance);
+        phashGroups = rawGroups
+          .map(cluster => analysis.makeDuplicateGroup(cluster, "phash"))
+          .filter(group => group.scenes.length > 1);
+      } catch (error) {
+        console.warn("[DupeFinder] pHash duplicate lookup failed, falling back to local pHash grouping", error);
+        phashGroups = analysis.findPhashDuplicateScenes(state.allScenes, state.settings);
+      }
 
-      const validMultiIds = new Set(state.multiFileScenes.map(scene => helpers.idKey(scene.id)));
-      Object.keys(state.multiKeepers).forEach(sceneId => {
-        if (!validMultiIds.has(sceneId)) delete state.multiKeepers[sceneId];
-      });
-      state.multiFileScenes.forEach(scene => {
-        const selectedId = state.multiKeepers[helpers.idKey(scene.id)];
-        if (selectedId && !(scene.files || []).some(file => helpers.idKey(file.id) === selectedId)) {
-          delete state.multiKeepers[helpers.idKey(scene.id)];
-        }
-      });
-      state.multiBatchExcluded = new Set([...state.multiBatchExcluded].filter(sceneId => validMultiIds.has(sceneId)));
-      state.multiBatchForcedIncluded = new Set([...state.multiBatchForcedIncluded].filter(sceneId => {
-        const scene = state.multiFileScenes.find(item => helpers.idKey(item.id) === sceneId);
-        return scene && analysis.hasLargeDurationMismatch(scene, state.settings);
-      }));
+      const fallbackScenes = state.allScenes.filter(scene => !analysis.sceneHasPhash(scene, state.settings));
+      const legacyGroups = analysis.findLegacyDuplicateScenes(fallbackScenes, state.settings);
+      state.dupGroups = analysis.sortDuplicateGroups(phashGroups.concat(legacyGroups));
+      state.duplicateGroupsDirty = false;
+      refreshDuplicateSelections();
+    }
 
-      const dupMap = new Map(state.dupGroups.map(group => [group.key, group]));
-      Object.keys(state.duplicateKeepers).forEach(groupKey => {
-        const group = dupMap.get(groupKey);
-        if (!group || !group.scenes.some(scene => helpers.idKey(scene.id) === state.duplicateKeepers[groupKey])) {
-          delete state.duplicateKeepers[groupKey];
-        }
-      });
-      state.dupBatchExcluded = new Set([...state.dupBatchExcluded].filter(groupKey => dupMap.has(groupKey)));
-      state.dupBatchForcedIncluded = new Set([...state.dupBatchForcedIncluded].filter(groupKey => {
-        const group = dupMap.get(groupKey);
-        return group && isGroupUnsafe(group);
-      }));
+    async function refreshDerivedState(forceDuplicateRefresh) {
+      refreshMultiDerivedState();
+      if (forceDuplicateRefresh) await refreshDuplicateGroups(true);
     }
 
     function removeSceneFromState(sceneId) {
@@ -102,7 +133,12 @@
       delete state.multiKeepers[sceneKey];
       state.multiBatchExcluded.delete(sceneKey);
       state.multiBatchForcedIncluded.delete(sceneKey);
-      refreshDerivedState();
+      state.dupGroups = state.dupGroups
+        .map(group => ({ ...group, scenes: group.scenes.filter(scene => helpers.idKey(scene.id) !== sceneKey) }))
+        .filter(group => group.scenes.length > 1);
+      markDuplicateGroupsDirty();
+      refreshMultiDerivedState();
+      refreshDuplicateSelections();
     }
 
     function refreshCleanedSceneState(sceneId, keeperFileId) {
@@ -117,7 +153,8 @@
       delete state.multiKeepers[sceneKey];
       state.multiBatchExcluded.delete(sceneKey);
       state.multiBatchForcedIncluded.delete(sceneKey);
-      refreshDerivedState();
+      markDuplicateGroupsDirty();
+      refreshMultiDerivedState();
     }
 
     function refreshMergedGroupState(group, keeperScene) {
@@ -140,7 +177,59 @@
       delete state.duplicateKeepers[group.key];
       state.dupBatchExcluded.delete(group.key);
       state.dupBatchForcedIncluded.delete(group.key);
-      refreshDerivedState();
+      state.dupGroups = state.dupGroups.filter(item => item.key !== group.key);
+      refreshMultiDerivedState();
+      refreshDuplicateSelections();
+    }
+
+    function buildSplitSceneInput(scene) {
+      const input = {
+        organized: !!scene.organized,
+      };
+      if (scene.title) input.title = scene.title;
+      if (scene.code) input.code = scene.code;
+      if (scene.details) input.details = scene.details;
+      if (scene.director) input.director = scene.director;
+      if (scene.date) input.date = scene.date;
+      if (scene.production_date) input.production_date = scene.production_date;
+      if (Array.isArray(scene.urls) && scene.urls.length) input.urls = scene.urls.filter(Boolean);
+      const rating100 = helpers.toFiniteNumber(scene.rating100);
+      if (rating100 !== null) input.rating100 = rating100;
+      if (scene.studio && scene.studio.id) input.studio_id = String(scene.studio.id);
+      if ((scene.galleries || []).length) input.gallery_ids = scene.galleries.map(gallery => String(gallery.id));
+      if ((scene.performers || []).length) input.performer_ids = scene.performers.map(performer => String(performer.id));
+      if ((scene.tags || []).length) input.tag_ids = scene.tags.map(tag => String(tag.id));
+      if ((scene.groups || []).length) {
+        input.groups = scene.groups
+          .filter(item => item && item.group && item.group.id)
+          .map(item => {
+            const groupInput = { group_id: String(item.group.id) };
+            const sceneIndex = helpers.toFiniteNumber(item.scene_index);
+            if (sceneIndex !== null) groupInput.scene_index = sceneIndex;
+            return groupInput;
+          });
+      }
+      return input;
+    }
+
+    function refreshSplitSceneState(updatedScene, createdScenes) {
+      const sceneKey = helpers.idKey(updatedScene.id);
+      const createdKeys = new Set((createdScenes || []).map(scene => helpers.idKey(scene.id)));
+      const nextScenes = [];
+      state.allScenes.forEach(scene => {
+        if (createdKeys.has(helpers.idKey(scene.id))) return;
+        if (helpers.idKey(scene.id) !== sceneKey) {
+          nextScenes.push(scene);
+          return;
+        }
+        nextScenes.push(updatedScene);
+      });
+      state.allScenes = nextScenes.concat(createdScenes || []);
+      delete state.multiKeepers[sceneKey];
+      state.multiBatchExcluded.delete(sceneKey);
+      state.multiBatchForcedIncluded.delete(sceneKey);
+      markDuplicateGroupsDirty();
+      refreshMultiDerivedState();
     }
 
     async function executeKeepScene(scene, keeper, extraFiles) {
@@ -153,6 +242,43 @@
       await api.mergeScenes(sources.map(scene => scene.id), keeper.id);
       const mergedKeeper = await api.fetchScene(keeper.id);
       refreshMergedGroupState(group, mergedKeeper);
+    }
+
+    async function executeSplitScene(scene, keeper, extraFiles) {
+      await api.setScenePrimaryFile(scene.id, keeper.id);
+      const createdScenes = [];
+      const failures = [];
+      let updatedScene = scene;
+      for (const file of extraFiles) {
+        let createdSceneId = null;
+        let assigned = false;
+        try {
+          const created = await api.createScene(buildSplitSceneInput(scene));
+          if (!created) throw new Error("Scene creation returned no scene");
+          createdSceneId = created.id;
+          await api.assignSceneFile(created.id, file.id);
+          assigned = true;
+          createdScenes.push(await api.fetchScene(created.id));
+        } catch (error) {
+          if (createdSceneId && !assigned) {
+            try {
+              await api.destroyScene(createdSceneId, false);
+            } catch (_) {
+              // Ignore cleanup failures and surface the original split error below.
+            }
+          }
+          failures.push(`${helpers.fileName(file)}: ${error.message}`);
+        }
+      }
+      try {
+        updatedScene = await api.fetchScene(scene.id);
+      } catch (error) {
+        updatedScene = { ...scene, files: [keeper] };
+      }
+      refreshSplitSceneState(updatedScene, createdScenes);
+      if (failures.length) {
+        throw new Error(`Split completed with ${failures.length} failure(s): ${failures.join(" | ")}`);
+      }
     }
 
     async function runKeepScene(scene, withBusyOperation, updateBusyOperation, showTab) {
@@ -192,6 +318,51 @@
         ui.toast(`Kept selected file for scene #${scene.id}`, "#98c379");
       } catch (e) {
         ui.toast(`Cleanup error: ${e.message}`, "#e06c75");
+      }
+    }
+
+    async function runSplitScene(scene, withBusyOperation, updateBusyOperation, showTab) {
+      const keeper = getSelectedMultiFile(scene);
+      const extraFiles = (scene.files || []).filter(file => helpers.idKey(file.id) !== helpers.idKey(keeper.id));
+      if (!keeper || !extraFiles.length) {
+        ui.toast(`Scene #${scene.id} already only has the selected keep file`, "#56b6c2");
+        return;
+      }
+
+      if (!(await api.canSplitScenes())) {
+        ui.toast("Split requires a Stash server that supports sceneCreate and sceneAssignFile.", "#e06c75");
+        return;
+      }
+
+      if (state.dryRun) {
+        ui.previewAction(`Split scene ${helpers.sceneName(scene)}`, [
+          `Original scene keeps: ${helpers.filePathLabel(keeper)}`,
+          "",
+          `Would create ${extraFiles.length} new scene(s):`,
+          ...extraFiles.map(file => `- ${helpers.filePathLabel(file)}`),
+        ]);
+        return;
+      }
+
+      if (!confirm(
+        `Split "${helpers.sceneName(scene)}" into ${extraFiles.length + 1} scene(s)?\n\n` +
+        `The current scene will keep:\n- ${helpers.fileName(keeper)}\n\n` +
+        `Each other file will become its own new scene with copied metadata:\n${extraFiles.map(file => `- ${helpers.fileName(file)}`).join("\n")}`
+      )) return;
+
+      try {
+        await withBusyOperation({
+          label: "Splitting multi-file scene…",
+          detail: `Scene #${scene.id} ${helpers.sceneName(scene)}`,
+          total: extraFiles.length,
+        }, async () => {
+          await executeSplitScene(scene, keeper, extraFiles);
+          updateBusyOperation({ completed: extraFiles.length });
+        });
+        await showTab(state.currentTab);
+        ui.toast(`Split scene #${scene.id} into ${extraFiles.length + 1} scene(s)`, "#c678dd");
+      } catch (e) {
+        ui.toast(`Split error: ${e.message}`, "#e06c75");
       }
     }
 
@@ -249,20 +420,23 @@
       const header = ui.el("div", STYLE.header);
       const titleEl = ui.el("span", "color:#e5c07b;font-weight:700;font-size:1.1em;", "🔍 DupeFinder");
       const closeBtn = ui.mkBtn("✕", "#3e4451", () => overlay.remove());
-      const settingsBtn = ui.mkBtn("⚙ Settings", "#56b6c2", () => {
+      closeBtn.setAttribute("aria-label", "Close DupeFinder");
+      const settingsBtn = ui.mkBtn("⚙", "#56b6c2", () => {
         if (settingsOverlay && settingsOverlay.isConnected) return;
         settingsOverlay = tables.renderSettingsModal({
           settings: state.settings,
-          onSave(raw) {
+          async onSave(raw) {
             state.settings = settingsStore.save(raw);
-            refreshDerivedState();
-            if (state.loaded) showTab(state.currentTab);
+            markDuplicateGroupsDirty();
+            refreshMultiDerivedState();
+            if (state.loaded) await showTab(state.currentTab);
             ui.toast("Settings saved", "#56b6c2");
           },
-          onReset() {
+          async onReset() {
             state.settings = settingsStore.reset();
-            refreshDerivedState();
-            if (state.loaded) showTab(state.currentTab);
+            markDuplicateGroupsDirty();
+            refreshMultiDerivedState();
+            if (state.loaded) await showTab(state.currentTab);
             ui.toast("Settings reset to defaults", "#56b6c2");
           },
           onClose() {
@@ -271,6 +445,8 @@
         });
         modal.appendChild(settingsOverlay);
       });
+      settingsBtn.title = "Settings";
+      settingsBtn.setAttribute("aria-label", "Open DupeFinder settings");
       const controls = ui.el("div", "display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-left:auto;");
       modal.appendChild(header);
       header.appendChild(titleEl);
@@ -512,7 +688,7 @@
         }
       }
 
-      function showTab(tab) {
+      async function showTab(tab) {
         state.currentTab = tab;
         updateTitle();
         tabBar.innerHTML = "";
@@ -573,11 +749,19 @@
             onKeepScene(scene) {
               return runKeepScene(scene, withBusyOperation, updateBusyOperation, showTab);
             },
+            onSplitScene(scene) {
+              return runSplitScene(scene, withBusyOperation, updateBusyOperation, showTab);
+            },
             onDeleteScene(scene) {
               return runDeleteScene(scene);
             },
           }));
         } else {
+          body.innerHTML = "";
+          body.appendChild(ui.el("div", "color:#5c6370;padding:20px 0;text-align:center;font-size:0.9em;", "Loading duplicate groups…"));
+          await refreshDuplicateGroups();
+          if (state.currentTab !== "dupes") return;
+          body.innerHTML = "";
           if (state.batchMode) {
             const includedCount = state.dupGroups.filter(group => isGroupIncluded(group)).length;
             body.appendChild(tables.renderBatchBar({
@@ -667,11 +851,11 @@
 
       api.fetchAllScenes((loadedCount, total) => {
         if (!state.loaded && loadingEl.isConnected) loadingEl.textContent = `Loading scenes… ${loadedCount} / ${total}`;
-      }).then(scenes => {
+      }).then(async scenes => {
         state.allScenes = scenes;
-        refreshDerivedState();
+        await refreshDerivedState(true);
         state.loaded = true;
-        showTab("multi");
+        await showTab("multi");
       }).catch(err => {
         body.innerHTML = "";
         body.appendChild(ui.el("div", "color:#e06c75;padding:20px 0;", `Error: ${err.message}`));
