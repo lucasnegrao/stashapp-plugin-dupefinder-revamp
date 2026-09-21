@@ -668,7 +668,7 @@
       return group.scenes.find(scene => idKey(scene.id) === selectedId) || bestScene(group.scenes);
     }
 
-    function isSceneIncluded(scene) {
+    function isSceneBatchIncluded(scene) {
       const sceneKey = idKey(scene.id);
       if (hasLargeDurationMismatch(scene)) return multiBatchForcedIncluded.has(sceneKey);
       return !multiBatchExcluded.has(sceneKey);
@@ -848,7 +848,7 @@
 
     async function runMultiBatch() {
       const plans = multiFileScenes
-        .filter(scene => isSceneIncluded(scene))
+        .filter(scene => isSceneBatchIncluded(scene))
         .map(scene => {
           const keeper = getSelectedMultiFile(scene);
           return {
@@ -1042,7 +1042,7 @@
 
       if (tab === "multi") {
         if (batchMode) {
-          const includedCount = multiFileScenes.filter(scene => isSceneIncluded(scene)).length;
+          const includedCount = multiFileScenes.filter(scene => isSceneBatchIncluded(scene)).length;
           body.appendChild(renderBatchBar({
             totalCount: multiFileScenes.length,
             includedCount,
@@ -1053,14 +1053,14 @@
             note: multiFileScenes.some(hasLargeDurationMismatch)
               ? `Scenes with file durations differing by more than ${MAX_BATCH_DURATION_DIFF_SECONDS}s start excluded from the batch.`
               : "Exclude items you want to skip, then run the batch action.",
-            isDisabled: () => multiFileScenes.filter(scene => isSceneIncluded(scene)).length === 0,
+            isDisabled: () => multiFileScenes.filter(scene => isSceneBatchIncluded(scene)).length === 0,
           }));
         }
 
         body.appendChild(renderMultiFileTable(multiFileScenes, {
           dryRun,
           batchMode,
-          isSceneIncluded,
+          isSceneIncluded: isSceneBatchIncluded,
           getSelectedFile: getSelectedMultiFile,
           onSelectFile(sceneId, fileId) {
             multiKeepers[idKey(sceneId)] = idKey(fileId);
@@ -1071,7 +1071,7 @@
             if (!scene) return;
             const key = idKey(sceneId);
             const hasDurationMismatch = hasLargeDurationMismatch(scene);
-            const included = isSceneIncluded(scene);
+            const included = isSceneBatchIncluded(scene);
             if (hasDurationMismatch) {
               if (included) {
                 multiBatchForcedIncluded.delete(key);
