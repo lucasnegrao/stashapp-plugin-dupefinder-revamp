@@ -621,10 +621,11 @@
         ? `${Math.min(operationState.completed, operationState.total)} / ${operationState.total} completed`
         : "Please wait…";
       busyProgressEl.textContent = operationState.detail ? `${progressText} — ${operationState.detail}` : progressText;
-      busyWarningEl.textContent = operationState.abortRequested
+      const warningText = operationState.abortRequested
         ? `Abort requested. The current item will finish first, then the batch will stop. ${operationState.warning || ""}`.trim()
         : (operationState.warning || "");
-      busyWarningEl.style.display = operationState.warning ? "block" : "none";
+      busyWarningEl.textContent = warningText;
+      busyWarningEl.style.display = warningText ? "block" : "none";
       busyAbortBtn.style.display = operationState.abortable ? "inline-block" : "none";
       busyAbortBtn.disabled = operationState.abortRequested;
       busyAbortBtn.textContent = operationState.abortRequested ? "Abort requested…" : "Abort remaining items";
