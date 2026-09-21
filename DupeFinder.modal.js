@@ -123,9 +123,7 @@
         const phashSceneIds = new Set(
           phashGroups.flatMap(group => group.scenes.map(scene => helpers.idKey(scene.id)))
         );
-        const fallbackScenes = state.allScenes.filter(scene =>
-          !analysis.sceneHasPhash(scene, state.settings) && !phashSceneIds.has(helpers.idKey(scene.id))
-        );
+        const fallbackScenes = state.allScenes.filter(scene => !phashSceneIds.has(helpers.idKey(scene.id)));
         const legacyGroups = analysis.findLegacyDuplicateScenes(fallbackScenes, state.settings);
         state.dupGroups = analysis.sortDuplicateGroups(phashGroups.concat(legacyGroups));
       }

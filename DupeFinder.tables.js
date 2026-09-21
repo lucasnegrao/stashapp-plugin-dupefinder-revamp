@@ -140,9 +140,9 @@
       return wrap;
     }
 
-    const duplicateModeField = field("Duplicate finder mode", duplicateModeSelect, "Switch between pHash-first matching with legacy fallback, or legacy-only title/date/studio matching.");
+    const duplicateModeField = field("Duplicate finder mode", duplicateModeSelect, "Switch between pHash-first matching with legacy fallback for scenes not already grouped, or legacy-only title/date/studio matching.");
     const phashDistanceField = field("pHash distance", distanceInput, "Preset maximum Hamming distance for pHash duplicate grouping.");
-    const legacyDistanceField = field("Legacy title distance", legacyDistanceInput, "Used only in legacy mode or as fallback when a scene has no pHash. 0 means strict title matching; higher values broaden title-only and same-meta title matching.");
+    const legacyDistanceField = field("Legacy title distance", legacyDistanceInput, "Used in legacy mode or as the fallback pass for scenes not already grouped by pHash. 0 means strict title matching; higher values broaden title-only and same-meta title matching.");
 
     form.appendChild(duplicateModeField);
     form.appendChild(phashDistanceField);
