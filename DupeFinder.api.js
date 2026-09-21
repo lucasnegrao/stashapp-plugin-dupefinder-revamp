@@ -2,7 +2,7 @@
   "use strict";
   const root = window.DupeFinder = window.DupeFinder || {};
 
-  const runtime = { supportsFingerprints: true };
+  const runtime = { supportsFingerprints: true, supportsSceneSplit: null };
   root.runtime = runtime;
 
   async function gql(query, variables) {
@@ -97,11 +97,30 @@
     }
   }
 
+  async function canSplitScenes() {
+    if (runtime.supportsSceneSplit !== null) return runtime.supportsSceneSplit;
+    try {
+      const d = await gql(`
+        query SplitSupport {
+          __type(name: "Mutation") {
+            fields { name }
+          }
+        }
+      `);
+      const names = (((d || {}).__type || {}).fields || []).map(field => field.name);
+      runtime.supportsSceneSplit = names.includes("sceneCreate") && names.includes("sceneAssignFile");
+    } catch (_) {
+      runtime.supportsSceneSplit = false;
+    }
+    return runtime.supportsSceneSplit;
+  }
+
   root.api = {
     gql,
     fetchAllScenes,
     fetchScene,
-    async fetchDuplicateScenes(distance) {
+    canSplitScenes,
+    async fetchDuplicateSceneGroups(distance) {
       try {
         const d = await gql(`
           query FindDuplicateScenes($distance: Int) {
@@ -110,7 +129,8 @@
             }
           }
         `, { distance: Number(distance) });
-        return d.findDuplicateScenes || [];
+        const groups = d.findDuplicateScenes || [];
+        return groups.map(group => Array.isArray(group) ? group : [group]);
       } catch (error) {
         if (runtime.supportsFingerprints && /fingerprints/i.test(String(error && error.message))) {
           runtime.supportsFingerprints = false;
@@ -121,7 +141,8 @@
               }
             }
           `, { distance: Number(distance) });
-          return d.findDuplicateScenes || [];
+          const groups = d.findDuplicateScenes || [];
+          return groups.map(group => Array.isArray(group) ? group : [group]);
         }
         throw error;
       }
@@ -178,6 +199,13 @@
         }
         throw error;
       }
+    },
+    async assignSceneFile(sceneId, fileId) {
+      return gql(`
+        mutation SceneAssignFile($input: AssignSceneFileInput!) {
+          sceneAssignFile(input: $input)
+        }
+      `, { input: { scene_id: String(sceneId), file_id: String(fileId) } });
     },
   };
 })();

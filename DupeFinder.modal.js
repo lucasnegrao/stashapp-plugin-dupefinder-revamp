@@ -106,7 +106,7 @@
       if (!force && !state.duplicateGroupsDirty) return;
       let phashGroups = [];
       try {
-        const rawGroups = await api.fetchDuplicateScenes(state.settings.phashDistance);
+        const rawGroups = await api.fetchDuplicateSceneGroups(state.settings.phashDistance);
         phashGroups = rawGroups
           .map(cluster => analysis.makeDuplicateGroup(cluster, "phash"))
           .filter(group => group.scenes.length > 1);
@@ -182,10 +182,9 @@
       refreshDuplicateSelections();
     }
 
-    function buildSplitSceneInput(scene, fileId) {
+    function buildSplitSceneInput(scene) {
       const input = {
         organized: !!scene.organized,
-        file_ids: [String(fileId)],
       };
       if (scene.title) input.title = scene.title;
       if (scene.code) input.code = scene.code;
@@ -248,23 +247,38 @@
     async function executeSplitScene(scene, keeper, extraFiles) {
       await api.setScenePrimaryFile(scene.id, keeper.id);
       const createdScenes = [];
+      const failures = [];
       let updatedScene = scene;
-      try {
-        for (const file of extraFiles) {
-          const created = await api.createScene(buildSplitSceneInput(scene, file.id));
-          if (created) createdScenes.push(created);
+      for (const file of extraFiles) {
+        let createdSceneId = null;
+        let assigned = false;
+        try {
+          const created = await api.createScene(buildSplitSceneInput(scene));
+          if (!created) throw new Error("Scene creation returned no scene");
+          createdSceneId = created.id;
+          await api.assignSceneFile(created.id, file.id);
+          assigned = true;
+          createdScenes.push(await api.fetchScene(created.id));
+        } catch (error) {
+          if (createdSceneId && !assigned) {
+            try {
+              await api.destroyScene(createdSceneId, false);
+            } catch (_) {
+              // Ignore cleanup failures and surface the original split error below.
+            }
+          }
+          failures.push(`${helpers.fileName(file)}: ${error.message}`);
         }
+      }
+      try {
         updatedScene = await api.fetchScene(scene.id);
       } catch (error) {
-        try {
-          updatedScene = await api.fetchScene(scene.id);
-        } catch (_) {
-          updatedScene = { ...scene, files: [keeper] };
-        }
-        refreshSplitSceneState(updatedScene, createdScenes);
-        throw error;
+        updatedScene = { ...scene, files: [keeper] };
       }
       refreshSplitSceneState(updatedScene, createdScenes);
+      if (failures.length) {
+        throw new Error(`Split completed with ${failures.length} failure(s): ${failures.join(" | ")}`);
+      }
     }
 
     async function runKeepScene(scene, withBusyOperation, updateBusyOperation, showTab) {
@@ -312,6 +326,11 @@
       const extraFiles = (scene.files || []).filter(file => helpers.idKey(file.id) !== helpers.idKey(keeper.id));
       if (!keeper || !extraFiles.length) {
         ui.toast(`Scene #${scene.id} already only has the selected keep file`, "#56b6c2");
+        return;
+      }
+
+      if (!(await api.canSplitScenes())) {
+        ui.toast("Split requires a Stash server that supports sceneCreate and sceneAssignFile.", "#e06c75");
         return;
       }
 
@@ -401,6 +420,7 @@
       const header = ui.el("div", STYLE.header);
       const titleEl = ui.el("span", "color:#e5c07b;font-weight:700;font-size:1.1em;", "🔍 DupeFinder");
       const closeBtn = ui.mkBtn("✕", "#3e4451", () => overlay.remove());
+      closeBtn.setAttribute("aria-label", "Close DupeFinder");
       const settingsBtn = ui.mkBtn("⚙", "#56b6c2", () => {
         if (settingsOverlay && settingsOverlay.isConnected) return;
         settingsOverlay = tables.renderSettingsModal({
@@ -426,6 +446,7 @@
         modal.appendChild(settingsOverlay);
       });
       settingsBtn.title = "Settings";
+      settingsBtn.setAttribute("aria-label", "Open DupeFinder settings");
       const controls = ui.el("div", "display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-left:auto;");
       modal.appendChild(header);
       header.appendChild(titleEl);
