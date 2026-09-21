@@ -104,20 +104,29 @@
 
     async function refreshDuplicateGroups(force) {
       if (!force && !state.duplicateGroupsDirty) return;
-      let phashGroups = [];
-      try {
-        const rawGroups = await api.fetchDuplicateSceneGroups(state.settings.phashDistance);
-        phashGroups = rawGroups
-          .map(cluster => analysis.makeDuplicateGroup(cluster, "phash"))
-          .filter(group => group.scenes.length > 1);
-      } catch (error) {
-        console.warn("[DupeFinder] pHash duplicate lookup failed, falling back to local pHash grouping", error);
-        phashGroups = analysis.findPhashDuplicateScenes(state.allScenes, state.settings);
-      }
+      if (state.settings.duplicateFinderMode === "legacy") {
+        state.dupGroups = analysis.sortDuplicateGroups(
+          analysis.findLegacyDuplicateScenes(state.allScenes, state.settings)
+        );
+      } else {
+        let phashGroups = [];
+        try {
+          const rawGroups = await api.fetchDuplicateSceneGroups(state.settings.phashDistance);
+          phashGroups = rawGroups
+            .map(cluster => analysis.makeDuplicateGroup(cluster, "phash"))
+            .filter(group => group.scenes.length > 1);
+        } catch (error) {
+          console.warn("[DupeFinder] pHash duplicate lookup failed, falling back to local pHash grouping", error);
+          phashGroups = analysis.findPhashDuplicateScenes(state.allScenes, state.settings);
+        }
 
-      const fallbackScenes = state.allScenes.filter(scene => !analysis.sceneHasPhash(scene, state.settings));
-      const legacyGroups = analysis.findLegacyDuplicateScenes(fallbackScenes, state.settings);
-      state.dupGroups = analysis.sortDuplicateGroups(phashGroups.concat(legacyGroups));
+        const phashSceneIds = new Set(
+          phashGroups.flatMap(group => group.scenes.map(scene => helpers.idKey(scene.id)))
+        );
+        const fallbackScenes = state.allScenes.filter(scene => !phashSceneIds.has(helpers.idKey(scene.id)));
+        const legacyGroups = analysis.findLegacyDuplicateScenes(fallbackScenes, state.settings);
+        state.dupGroups = analysis.sortDuplicateGroups(phashGroups.concat(legacyGroups));
+      }
       state.duplicateGroupsDirty = false;
       refreshDuplicateSelections();
     }

@@ -29,10 +29,35 @@
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ query, variables: variables || {} }),
     });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data = await res.json();
-    if (data.errors && data.errors.length) throw new Error(data.errors.map(e => e.message).join(", "));
-    return data.data;
+    const text = await res.text();
+    let data = null;
+    if (text) {
+      try {
+        data = JSON.parse(text);
+      } catch (_) {
+        data = null;
+      }
+    }
+    if (data && data.errors && data.errors.length) {
+      const error = new Error(data.errors.map(e => e.message).join(", "));
+      error.status = res.status;
+      error.graphQLErrors = data.errors;
+      throw error;
+    }
+    if (!res.ok) {
+      const detail = (text || "")
+        .replace(/<[^>]*>/g, " ")
+        .replace(/\s+/g, " ")
+        .trim()
+        .slice(0, 200);
+      const error = new Error(detail ? `HTTP ${res.status}: ${detail}` : `HTTP ${res.status}`);
+      error.status = res.status;
+      error.responseText = text;
+      throw error;
+    }
+    if (!text.trim()) return {};
+    if (!data || typeof data !== "object") throw new Error("Invalid GraphQL response");
+    return Object.prototype.hasOwnProperty.call(data, "data") ? data.data : null;
   }
 
   function sceneFragment(includeFingerprints, includeExtendedFields) {
