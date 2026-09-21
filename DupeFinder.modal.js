@@ -287,6 +287,15 @@
       const busyTitleEl = ui.el("div", "color:#e5c07b;font-weight:700;font-size:1em;");
       const busyProgressEl = ui.el("div", "color:#abb2bf;font-size:0.88em;margin-top:8px;");
       const busyWarningEl = ui.el("div", "color:#e5c07b;font-size:0.8em;margin-top:10px;line-height:1.4;");
+      busyOverlay.setAttribute("role", "dialog");
+      busyOverlay.setAttribute("aria-modal", "true");
+      busyOverlay.setAttribute("aria-labelledby", "df-busy-title");
+      busyOverlay.setAttribute("aria-describedby", "df-busy-progress df-busy-warning");
+      busyTitleEl.id = "df-busy-title";
+      busyProgressEl.id = "df-busy-progress";
+      busyWarningEl.id = "df-busy-warning";
+      busyProgressEl.setAttribute("aria-live", "polite");
+      busyWarningEl.setAttribute("aria-live", "assertive");
       const busyAbortBtn = ui.mkBtn("Abort remaining items", "#e5c07b", () => {
         if (!state.operation.abortable || state.operation.abortRequested) return;
         if (!confirm("Abort the remaining batch items after the current item finishes?\n\nAlready completed actions will NOT be undone.")) return;

@@ -71,8 +71,10 @@
       const aSize = (a.files || []).reduce((n, f) => n + (f.size || 0), 0);
       const bSize = (b.files || []).reduce((n, f) => n + (f.size || 0), 0);
       if (aSize !== bSize) return aSize - bSize;
+      const codecDiff = codecScore(aBest) - codecScore(bBest);
+      if (codecDiff) return codecDiff;
       if (settings.preferOrganizedInBest && !!b.organized !== !!a.organized) return b.organized ? 1 : -1;
-      return codecScore(aBest) - codecScore(bBest);
+      return 0;
     })[0];
   }
 
@@ -97,7 +99,11 @@
   }
 
   function duplicateCandidatesByMeta(scene) {
-    return [helpers.normDate(scene.date), helpers.norm(scene.studio ? scene.studio.name : "")].join("||");
+    const title = helpers.norm(scene.title);
+    const date = helpers.normDate(scene.date);
+    const studio = helpers.norm(scene.studio ? scene.studio.name : "");
+    if (date && studio) return `meta:${date}||${studio}`;
+    return `title:${title}`;
   }
 
   function areScenesDuplicateBySettings(a, b, settings) {
@@ -108,8 +114,10 @@
     const aStudio = helpers.norm(a.studio ? a.studio.name : "");
     const bStudio = helpers.norm(b.studio ? b.studio.name : "");
 
-    if (aDate !== bDate || aStudio !== bStudio) return false;
-    if (!aTitle && !bTitle) return true;
+    const hasMetaA = !!(aDate && aStudio);
+    const hasMetaB = !!(bDate && bStudio);
+    if (hasMetaA !== hasMetaB) return false;
+    if (hasMetaA && (aDate !== bDate || aStudio !== bStudio)) return false;
     if (!aTitle || !bTitle) return false;
     return levenshtein(aTitle, bTitle) <= settings.defaultDistance;
   }
