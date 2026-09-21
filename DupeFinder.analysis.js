@@ -117,7 +117,12 @@
     const hasMetaA = !!(aDate && aStudio);
     const hasMetaB = !!(bDate && bStudio);
     if (hasMetaA !== hasMetaB) return false;
-    if (hasMetaA) return aDate === bDate && aStudio === bStudio;
+    if (hasMetaA) {
+      if (aDate !== bDate || aStudio !== bStudio) return false;
+      if (!aTitle && !bTitle) return true;
+      if (!aTitle || !bTitle) return false;
+      return levenshtein(aTitle, bTitle) <= settings.defaultDistance;
+    }
     if (!aTitle || !bTitle) return false;
     return levenshtein(aTitle, bTitle) <= settings.defaultDistance;
   }
@@ -136,31 +141,44 @@
 
     const groups = [];
     byMeta.forEach(bucket => {
-      const used = new Set();
-      for (let i = 0; i < bucket.length; i++) {
-        if (used.has(i)) continue;
-        const cluster = [bucket[i]];
-        used.add(i);
-        let changed = true;
-        while (changed) {
-          changed = false;
-          for (let j = 0; j < bucket.length; j++) {
-            if (used.has(j)) continue;
-            if (cluster.some(existing => areScenesDuplicateBySettings(existing, bucket[j], settings))) {
-              cluster.push(bucket[j]);
-              used.add(j);
-              changed = true;
-            }
-          }
+      const n = bucket.length;
+      if (n < 2) return;
+
+      const parent = Array.from({ length: n }, (_, index) => index);
+      const find = i => {
+        while (parent[i] !== i) {
+          parent[i] = parent[parent[i]];
+          i = parent[i];
         }
-        if (cluster.length > 1) {
-          const sample = cluster[0];
-          groups.push({
-            key: JSON.stringify([helpers.norm(sample.title), helpers.normDate(sample.date), helpers.norm(sample.studio ? sample.studio.name : ""), cluster.map(s => helpers.idKey(s.id)).sort().join(",")]),
-            scenes: cluster,
-          });
+        return i;
+      };
+      const union = (a, b) => {
+        const pa = find(a);
+        const pb = find(b);
+        if (pa !== pb) parent[pb] = pa;
+      };
+
+      for (let i = 0; i < n; i++) {
+        for (let j = i + 1; j < n; j++) {
+          if (areScenesDuplicateBySettings(bucket[i], bucket[j], settings)) union(i, j);
         }
       }
+
+      const components = new Map();
+      for (let i = 0; i < n; i++) {
+        const rootId = find(i);
+        if (!components.has(rootId)) components.set(rootId, []);
+        components.get(rootId).push(bucket[i]);
+      }
+
+      components.forEach(cluster => {
+        if (cluster.length < 2) return;
+        const sample = cluster[0];
+        groups.push({
+          key: JSON.stringify([helpers.norm(sample.title), helpers.normDate(sample.date), helpers.norm(sample.studio ? sample.studio.name : ""), cluster.map(s => helpers.idKey(s.id)).sort().join(",")]),
+          scenes: cluster,
+        });
+      });
     });
 
     return groups.sort((a, b) => {

@@ -695,13 +695,19 @@
     }
 
     function schedule() {
-      if (document.readyState === "complete" || document.readyState === "interactive") injectButton();
-      else document.addEventListener("DOMContentLoaded", injectButton);
+      const startObserver = () => {
+        if (!document.body) return;
+        const obs = new MutationObserver(() => {
+          if (!document.getElementById(constants.BTN_ID)) injectButton();
+        });
+        obs.observe(document.body, { childList: true, subtree: false });
+      };
 
-      const obs = new MutationObserver(() => {
-        if (!document.getElementById(constants.BTN_ID)) injectButton();
-      });
-      obs.observe(document.body, { childList: true, subtree: false });
+      if (document.readyState === "complete" || document.readyState === "interactive") injectButton();
+      else document.addEventListener("DOMContentLoaded", injectButton, { once: true });
+
+      if (document.body) startObserver();
+      else document.addEventListener("DOMContentLoaded", startObserver, { once: true });
     }
 
     return { schedule };
