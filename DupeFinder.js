@@ -530,7 +530,8 @@
 
     const body = el("div", STYLE.body);
     modal.appendChild(body);
-    body.appendChild(el("div", "color:#5c6370;padding:40px 0;text-align:center;font-size:0.9em;", "Loading scenes… 0 / ?"));
+    const loadingEl = el("div", "color:#5c6370;padding:40px 0;text-align:center;font-size:0.9em;", "Loading scenes… 0 / ?");
+    body.appendChild(loadingEl);
 
     let allScenes = [];
     let multiFileScenes = [];
@@ -637,10 +638,7 @@
     }
 
     async function executeKeepScene(scene, keeper, extraFiles) {
-      const currentPrimary = (scene.files || [])[0];
-      if (currentPrimary && idKey(keeper.id) !== idKey(currentPrimary.id)) {
-        await setScenePrimaryFile(scene.id, keeper.id);
-      }
+      await setScenePrimaryFile(scene.id, keeper.id);
       await deleteFiles(extraFiles.map(file => file.id));
       refreshCleanedSceneState(scene.id, keeper.id);
     }
@@ -962,8 +960,7 @@
     updateTitle();
 
     fetchAllScenes((loadedCount, total) => {
-      const p = body.querySelector("div");
-      if (p) p.textContent = `Loading scenes… ${loadedCount} / ${total}`;
+      if (!loaded && loadingEl.isConnected) loadingEl.textContent = `Loading scenes… ${loadedCount} / ${total}`;
     }).then(scenes => {
       allScenes = scenes;
       refreshDerivedState();
