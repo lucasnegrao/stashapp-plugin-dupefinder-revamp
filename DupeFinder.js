@@ -1,7 +1,7 @@
 // v1.3 - DupeFinder - safer batch mode + progress overlay
 (function () {
   "use strict";
-  console.log("[DupeFinder] Script loaded v1.2");
+  console.log("[DupeFinder] Script loaded v1.3");
 
   const MODAL_ID = "df-modal";
   const BTN_ID   = "df-button";
