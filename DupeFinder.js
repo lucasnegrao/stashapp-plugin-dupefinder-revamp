@@ -124,6 +124,15 @@
     return all;
   }
 
+  async function fetchScene(id) {
+    const d = await gql(`
+      query FindScene($id: ID!) {
+        findScene(id: $id) { ${SCENE_FRAGMENT} }
+      }
+    `, { id: String(id) });
+    return d.findScene;
+  }
+
   // ── Analysis ───────────────────────────────────────────────────────────────
 
   function findMultiFileScenes(scenes) {
@@ -390,7 +399,8 @@
         mergeBtn.textContent = "Merging…"; mergeBtn.disabled = true;
         try {
           await mergeScenes(sources.map(s => s.id), keeper.id);
-          onGroupMerged(group);
+          const mergedKeeper = await fetchScene(keeper.id);
+          onGroupMerged(group, mergedKeeper);
           toast(`Merged ${sources.length} scene(s) into #${keeper.id}`, "#61afef");
         } catch(e) {
           toast(`Merge error: ${e.message}`, "#e06c75");
@@ -519,9 +529,11 @@
       multiFileScenes = multiFileScenes.filter(scene => (scene.files || []).length > 1);
     }
 
-    function removeMergedScenesFromState(group) {
-      const mergedIds = new Set(group.map(scene => scene.id));
-      multiFileScenes = multiFileScenes.filter(scene => !mergedIds.has(scene.id));
+    function refreshMergedGroupState(group, keeperScene) {
+      const sourceIds = new Set(group.filter(scene => scene.id !== keeperScene.id).map(scene => scene.id));
+      const remaining = multiFileScenes.filter(scene => !sourceIds.has(scene.id) && scene.id !== keeperScene.id);
+      if ((keeperScene.files || []).length > 1) remaining.push(keeperScene);
+      multiFileScenes = findMultiFileScenes(remaining);
       dupGroups = dupGroups.filter(g => g !== group);
     }
 
@@ -550,8 +562,8 @@
             removeSceneFromState(sceneId);
             showTab(currentTab);
           },
-          onGroupMerged(group) {
-            removeMergedScenesFromState(group);
+          onGroupMerged(group, keeperScene) {
+            refreshMergedGroupState(group, keeperScene);
             showTab(currentTab);
           },
         }));
