@@ -213,8 +213,8 @@
       return input;
     }
 
-    function refreshSplitSceneState(sceneId, keeperFileId, createdScenes) {
-      const sceneKey = helpers.idKey(sceneId);
+    function refreshSplitSceneState(updatedScene, createdScenes) {
+      const sceneKey = helpers.idKey(updatedScene.id);
       const createdKeys = new Set((createdScenes || []).map(scene => helpers.idKey(scene.id)));
       const nextScenes = [];
       state.allScenes.forEach(scene => {
@@ -223,8 +223,7 @@
           nextScenes.push(scene);
           return;
         }
-        const keeperFile = (scene.files || []).find(file => helpers.idKey(file.id) === helpers.idKey(keeperFileId));
-        nextScenes.push(keeperFile ? { ...scene, files: [keeperFile] } : scene);
+        nextScenes.push(updatedScene);
       });
       state.allScenes = nextScenes.concat(createdScenes || []);
       delete state.multiKeepers[sceneKey];
@@ -249,11 +248,23 @@
     async function executeSplitScene(scene, keeper, extraFiles) {
       await api.setScenePrimaryFile(scene.id, keeper.id);
       const createdScenes = [];
-      for (const file of extraFiles) {
-        const created = await api.createScene(buildSplitSceneInput(scene, file.id));
-        if (created) createdScenes.push(created);
+      let updatedScene = scene;
+      try {
+        for (const file of extraFiles) {
+          const created = await api.createScene(buildSplitSceneInput(scene, file.id));
+          if (created) createdScenes.push(created);
+        }
+        updatedScene = await api.fetchScene(scene.id);
+      } catch (error) {
+        try {
+          updatedScene = await api.fetchScene(scene.id);
+        } catch (_) {
+          updatedScene = { ...scene, files: [keeper] };
+        }
+        refreshSplitSceneState(updatedScene, createdScenes);
+        throw error;
       }
-      refreshSplitSceneState(scene.id, keeper.id, createdScenes);
+      refreshSplitSceneState(updatedScene, createdScenes);
     }
 
     async function runKeepScene(scene, withBusyOperation, updateBusyOperation, showTab) {

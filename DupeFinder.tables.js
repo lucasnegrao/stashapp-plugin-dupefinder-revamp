@@ -237,6 +237,8 @@
 
         const actionsTd = ui.el("td", STYLE.td + "white-space:normal;");
         const selectBtn = ui.mkBtn("Keep this", selected ? "#98c379" : "#56b6c2", () => onSelectFile(scene.id, file.id));
+        selectBtn.setAttribute("aria-pressed", selected ? "true" : "false");
+        selectBtn.title = selected ? "Currently selected keep file" : "Choose this file to keep";
         actionsTd.appendChild(selectBtn);
         if (selected && !batchMode && extraFiles.length) {
           const keepBtn = ui.mkBtn(dryRun ? "👁 Preview keep" : "🧹 Keep", "#98c379", async () => onKeepScene(scene));
@@ -339,6 +341,8 @@
 
         const actionsTd = ui.el("td", STYLE.td + "white-space:normal;");
         const keepBtn = ui.mkBtn("Keep this", isKeeper ? "#98c379" : "#56b6c2", () => onSelectScene(group.key, scene.id));
+        keepBtn.setAttribute("aria-pressed", isKeeper ? "true" : "false");
+        keepBtn.title = isKeeper ? "Currently selected keep scene" : "Choose this scene to keep";
         actionsTd.appendChild(keepBtn);
         if (isKeeper && !batchMode) {
           const mergeBtn = ui.mkBtn(dryRun ? "👁 Preview merge" : "⚡ Merge", "#61afef", async () => onMergeGroup(group));
