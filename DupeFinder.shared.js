@@ -149,7 +149,7 @@
       const distance = Number(candidate.defaultDistance);
       const threshold = Number(candidate.batchDurationDiffSeconds);
       const algo = String(candidate.bestAlgorithm || defaults.bestAlgorithm);
-      const bestAlgorithm = ["balanced", "quality", "size"] .includes(algo) ? algo : defaults.bestAlgorithm;
+      const bestAlgorithm = ["balanced", "quality", "size"].includes(algo) ? algo : defaults.bestAlgorithm;
       return {
         defaultDistance: Number.isFinite(distance) ? Math.max(0, Math.min(10, Math.round(distance))) : defaults.defaultDistance,
         bestAlgorithm,

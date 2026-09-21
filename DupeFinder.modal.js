@@ -30,6 +30,8 @@
         abortRequested: false,
         warning: "",
       },
+      observer: null,
+      scheduled: false,
     };
 
     function getSelectedMultiFile(scene) {
@@ -695,12 +697,15 @@
     }
 
     function schedule() {
+      if (state.scheduled) return;
+      state.scheduled = true;
+
       const startObserver = () => {
-        if (!document.body) return;
-        const obs = new MutationObserver(() => {
+        if (!document.body || state.observer) return;
+        state.observer = new MutationObserver(() => {
           if (!document.getElementById(constants.BTN_ID)) injectButton();
         });
-        obs.observe(document.body, { childList: true, subtree: false });
+        state.observer.observe(document.body, { childList: true, subtree: false });
       };
 
       if (document.readyState === "complete" || document.readyState === "interactive") injectButton();
