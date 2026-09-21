@@ -117,12 +117,7 @@
     const hasMetaA = !!(aDate && aStudio);
     const hasMetaB = !!(bDate && bStudio);
     if (hasMetaA !== hasMetaB) return false;
-    if (hasMetaA) {
-      if (aDate !== bDate || aStudio !== bStudio) return false;
-      if (!aTitle && !bTitle) return true;
-      if (!aTitle || !bTitle) return false;
-      return levenshtein(aTitle, bTitle) <= settings.defaultDistance;
-    }
+    if (hasMetaA) return aDate === bDate && aStudio === bStudio;
     if (!aTitle || !bTitle) return false;
     return levenshtein(aTitle, bTitle) <= settings.defaultDistance;
   }

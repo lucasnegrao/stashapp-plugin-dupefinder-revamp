@@ -69,10 +69,9 @@ Available actions:
 
 ## How duplicates are detected
 
-Two scenes are considered duplicates if they have the same:
-- Title (case-insensitive)
-- Date
-- Studio
+Two scenes are considered duplicates if they either:
+- Share the same Date + Studio metadata, or
+- Match by title using the configured distance threshold (for title-only matching)
 
 The title comparison can be tuned in **⚙ Settings** using a default Levenshtein distance:
 - `0` keeps strict exact-title matching
