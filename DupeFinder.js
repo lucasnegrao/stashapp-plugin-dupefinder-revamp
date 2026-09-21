@@ -514,30 +514,35 @@
 
     body.appendChild(el("div", "color:#5c6370;padding:40px 0;text-align:center;font-size:0.9em;", "Loading scenes… 0 / ?"));
 
-    let multiFileScenes = [], dupGroups = [];
+    let allScenes = [], multiFileScenes = [], dupGroups = [];
     let currentTab = "multi";
     let dryRun = false;
     let loaded = false;
 
-    function removeSceneFromState(sceneId) {
-      const sceneKey = idKey(sceneId);
-      multiFileScenes = multiFileScenes.filter(scene => idKey(scene.id) !== sceneKey);
-      dupGroups = dupGroups
-        .map(group => group.filter(scene => idKey(scene.id) !== sceneKey))
-        .filter(group => group.length > 1);
+    function refreshDerivedState() {
+      multiFileScenes = findMultiFileScenes(allScenes);
+      dupGroups = findDuplicateScenes(allScenes);
     }
 
-    function refreshMultiFileState() {
-      multiFileScenes = multiFileScenes.filter(scene => (scene.files || []).length > 1);
+    function removeSceneFromState(sceneId) {
+      const sceneKey = idKey(sceneId);
+      allScenes = allScenes.filter(scene => idKey(scene.id) !== sceneKey);
+      refreshDerivedState();
     }
 
     function refreshMergedGroupState(group, keeperScene) {
       const keeperKey = idKey(keeperScene.id);
       const sourceIds = new Set(group.filter(scene => idKey(scene.id) !== keeperKey).map(scene => idKey(scene.id)));
-      const remaining = multiFileScenes.filter(scene => !sourceIds.has(idKey(scene.id)) && idKey(scene.id) !== keeperKey);
-      if ((keeperScene.files || []).length > 1) remaining.push(keeperScene);
-      multiFileScenes = findMultiFileScenes(remaining);
-      dupGroups = dupGroups.filter(g => g !== group);
+      let keeperUpdated = false;
+      allScenes = allScenes
+        .filter(scene => !sourceIds.has(idKey(scene.id)))
+        .map(scene => {
+          if (idKey(scene.id) !== keeperKey) return scene;
+          keeperUpdated = true;
+          return keeperScene;
+        });
+      if (!keeperUpdated) allScenes.push(keeperScene);
+      refreshDerivedState();
     }
 
     function showTab(tab) {
@@ -554,7 +559,7 @@
             showTab(currentTab);
           },
           onSceneCleaned() {
-            refreshMultiFileState();
+            refreshDerivedState();
             showTab(currentTab);
           },
         }));
@@ -590,8 +595,8 @@
       const p = body.querySelector("div");
       if (p) p.textContent = `Loading scenes… ${loaded} / ${total}`;
     }).then(scenes => {
-      multiFileScenes = findMultiFileScenes(scenes);
-      dupGroups       = findDuplicateScenes(scenes);
+      allScenes = scenes;
+      refreshDerivedState();
       loaded = true;
       showTab("multi");
     }).catch(err => {
