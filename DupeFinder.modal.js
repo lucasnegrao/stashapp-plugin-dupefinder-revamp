@@ -105,7 +105,9 @@
     async function refreshDuplicateGroups(force) {
       if (!force && !state.duplicateGroupsDirty) return;
       if (state.settings.duplicateFinderMode === "legacy") {
-        state.dupGroups = analysis.findLegacyDuplicateScenes(state.allScenes, state.settings);
+        state.dupGroups = analysis.sortDuplicateGroups(
+          analysis.findLegacyDuplicateScenes(state.allScenes, state.settings)
+        );
       } else {
         let phashGroups = [];
         try {
