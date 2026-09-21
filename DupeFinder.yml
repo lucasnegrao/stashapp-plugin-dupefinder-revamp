@@ -5,4 +5,9 @@ url: ""
 
 ui:
   javascript:
+    - DupeFinder.shared.js
+    - DupeFinder.api.js
+    - DupeFinder.analysis.js
+    - DupeFinder.tables.js
+    - DupeFinder.modal.js
     - DupeFinder.js
