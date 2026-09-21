@@ -13,6 +13,13 @@
       { value: "medium", label: "Medium", distance: 8, meaning: "Up to 8 differing bits" },
       { value: "low", label: "Low", distance: 10, meaning: "Up to 10 differing bits" },
     ],
+    BATCH_DURATION_DIFF_OPTIONS: [
+      { value: -1, label: "Any" },
+      { value: 0, label: "Equal" },
+      { value: 1, label: "1 s" },
+      { value: 5, label: "5 s" },
+      { value: 10, label: "10 s" },
+    ],
   };
 
   root.defaults = {
@@ -154,6 +161,10 @@
     placeholder(value) {
       return value === undefined || value === null || value === "" ? "—" : String(value);
     },
+    durationDiffLimitLabel(value) {
+      const option = root.constants.BATCH_DURATION_DIFF_OPTIONS.find(item => item.value === Number(value));
+      return option ? option.label : `${value} s`;
+    },
   };
 
   root.settings = {
@@ -182,6 +193,7 @@
       const phashDistance = this.phashDistanceForPreset(phashDistanceMode);
       const legacyDistance = Number(candidate.legacyDistance !== undefined ? candidate.legacyDistance : candidate.defaultDistance);
       const threshold = Number(candidate.batchDurationDiffSeconds);
+      const validThreshold = root.constants.BATCH_DURATION_DIFF_OPTIONS.some(option => option.value === threshold);
       const algo = String(candidate.bestAlgorithm || defaults.bestAlgorithm);
       const bestAlgorithm = ["balanced", "quality", "size"].includes(algo) ? algo : defaults.bestAlgorithm;
       return {
@@ -191,7 +203,7 @@
         phashDistance: Number.isFinite(phashDistance) ? Math.max(0, Math.min(64, Math.round(phashDistance))) : defaults.phashDistance,
         legacyDistance: Number.isFinite(legacyDistance) ? Math.max(0, Math.min(10, Math.round(legacyDistance))) : defaults.legacyDistance,
         bestAlgorithm,
-        batchDurationDiffSeconds: Number.isFinite(threshold) ? Math.max(0, Math.min(3600, Math.round(threshold))) : defaults.batchDurationDiffSeconds,
+        batchDurationDiffSeconds: validThreshold ? threshold : defaults.batchDurationDiffSeconds,
         autoExcludeDuplicateUnsafe: candidate.autoExcludeDuplicateUnsafe !== undefined ? !!candidate.autoExcludeDuplicateUnsafe : defaults.autoExcludeDuplicateUnsafe,
         preferOrganizedInBest: candidate.preferOrganizedInBest !== undefined ? !!candidate.preferOrganizedInBest : defaults.preferOrganizedInBest,
       };

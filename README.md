@@ -12,7 +12,8 @@ A [Stash](https://github.com/stashapp/stash) plugin that finds duplicate scenes 
 - **Consistent keep labeling** — the selected keeper is always marked **keep** so the UI reflects your choice
 - **Batch mode for both tabs** — exclude any scene/group from the batch, then apply keep or merge to everything still included
 - **Safer batch defaults** — multi-file scenes and duplicate groups with large duration diffs start excluded from batch mode until you explicitly confirm them
-- **Settings modal** — configure duplicate finder mode, pHash distance presets, legacy fallback distance, best-selection algorithm, batch safety threshold, and additional behavior toggles
+- **Immediate duplicate controls** — switch duplicate mode and pHash distance from the main modal header; changes save and refresh results automatically
+- **Settings modal** — configure legacy fallback distance, best-selection algorithm, maximum duration difference, and additional behavior toggles
 - **Stable table layout** — fixed-width columns on both tabs with Actions first, plus pHash on both tables and Duration in duplicates
 - **Keep selected file cleanup** — in the Multi-file tab, keep the selected file and delete the rest without deleting the scene
 - **Split multi-file scenes** — unmerge a scene by keeping the selected file on the original scene and moving each other file into its own new scene
@@ -41,8 +42,9 @@ A [Stash](https://github.com/stashapp/stash) plugin that finds duplicate scenes 
 2. The plugin loads all scenes from your library (progress shown while loading)
 3. Optional: enable **Dry run / preview mode** in the modal header to preview destructive actions before executing them
 4. Optional: enable **Batch mode** to work through many scenes/groups at once while excluding anything you want to skip
-5. Optional: open **⚙** in the modal header to tune grouping/ranking behavior and safety defaults
-6. Two tabs are shown:
+5. Choose duplicate mode and, in pHash mode, pHash distance directly from the modal header; changes refresh the results automatically
+6. Optional: open **⚙** to tune ranking, legacy fallback, and batch safety behavior
+7. Two tabs are shown:
 
 ### Multi-file tab
 Lists every scene that has more than one file attached, sorted by file count. Click a file row to choose which file to **keep**. The selected file is highlighted and marked **keep**.
@@ -72,10 +74,13 @@ Two scenes are considered duplicates when:
 - In **pHash** mode, their pHashes are within the configured Hamming distance, or they have no pHash and the legacy matcher decides they match
 - In **Legacy** mode, the legacy matcher decides they match based on title and/or date+studio
 
-The duplicate settings can be tuned in **⚙**:
-- **Duplicate finder mode** switches between `pHash` and `Legacy`
-- **pHash distance** uses presets: `Exact (0)`, `High (4)`, `Medium (8)`, `Low (10)`
+The duplicate mode controls are in the main modal header:
+- **Mode** switches between `pHash` and `Legacy` and refreshes results immediately
+- **pHash distance** appears in pHash mode and uses presets: `Exact (0)`, `High (4)`, `Medium (8)`, `Low (10)`
+
+Additional settings can be tuned in **⚙**:
 - **Legacy title distance** controls the Levenshtein fallback used by legacy mode and by the no-pHash fallback pass in pHash mode
+- **Maximum duration difference** offers `Any`, `Equal`, `1 s`, `5 s`, and `10 s` for batch safety filtering
 
 Legacy fallback scenes with no title and no date+studio combination are excluded from duplicate detection.
 

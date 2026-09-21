@@ -59,6 +59,7 @@
   }
 
   function hasLargeDurationMismatch(scene, settings) {
+    if (settings.batchDurationDiffSeconds < 0) return false;
     return sceneDurationDiffSeconds(scene) > settings.batchDurationDiffSeconds;
   }
 
@@ -281,6 +282,7 @@
   }
 
   function hasUnsafeDuplicateGroup(group, settings) {
+    if (settings.batchDurationDiffSeconds < 0) return false;
     const hasLargeDiff = groupDurationDiffSeconds(group, settings) > settings.batchDurationDiffSeconds;
     if (!hasLargeDiff) return false;
     if (settings.duplicateFinderMode === "legacy") return true;

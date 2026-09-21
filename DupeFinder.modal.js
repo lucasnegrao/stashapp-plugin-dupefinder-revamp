@@ -423,6 +423,81 @@
 
       const header = ui.el("div", STYLE.header);
       const titleEl = ui.el("span", "color:#e5c07b;font-weight:700;font-size:1.1em;", "🔍 DupeFinder");
+      const controls = ui.el("div", "display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-left:auto;");
+      const headerSelectStyle = "background:#2c313a;border:1px solid #3e4451;color:#abb2bf;border-radius:4px;padding:5px 7px;font-size:0.82em;";
+
+      const duplicateModeSelect = document.createElement("select");
+      [
+        { value: "phash", label: "pHash" },
+        { value: "legacy", label: "Legacy" },
+      ].forEach(option => {
+        const opt = document.createElement("option");
+        opt.value = option.value;
+        opt.textContent = option.label;
+        duplicateModeSelect.appendChild(opt);
+      });
+      duplicateModeSelect.style.cssText = headerSelectStyle;
+      duplicateModeSelect.setAttribute("aria-label", "Duplicate finder mode");
+
+      const phashDistanceSelect = document.createElement("select");
+      constants.PHASH_DISTANCE_PRESETS.forEach(option => {
+        const opt = document.createElement("option");
+        opt.value = option.value;
+        opt.textContent = `${option.label} (${option.distance})`;
+        phashDistanceSelect.appendChild(opt);
+      });
+      phashDistanceSelect.style.cssText = headerSelectStyle;
+      phashDistanceSelect.setAttribute("aria-label", "pHash distance");
+
+      function headerSelect(label, select) {
+        const wrap = ui.el("label", "display:flex;align-items:center;gap:5px;color:#abb2bf;font-size:0.8em;white-space:nowrap;");
+        wrap.appendChild(document.createTextNode(label));
+        wrap.appendChild(select);
+        return wrap;
+      }
+
+      const duplicateModeControl = headerSelect("Mode", duplicateModeSelect);
+      const phashDistanceControl = headerSelect("pHash distance", phashDistanceSelect);
+
+      function syncHeaderSettingsControls() {
+        duplicateModeSelect.value = state.settings.duplicateFinderMode;
+        phashDistanceSelect.value = state.settings.phashDistanceMode;
+        phashDistanceControl.style.display = state.settings.duplicateFinderMode === "phash" ? "flex" : "none";
+      }
+
+      async function reloadAfterSettingsChange(message) {
+        syncHeaderSettingsControls();
+        markDuplicateGroupsDirty();
+        if (state.loaded) {
+          await refreshDerivedState(true);
+          await showTab(state.currentTab);
+        }
+        ui.toast(message, "#56b6c2");
+      }
+
+      async function saveAndReloadSettings(raw, message) {
+        state.settings = settingsStore.save({ ...state.settings, ...raw });
+        await reloadAfterSettingsChange(message);
+      }
+
+      async function changeHeaderSettings(raw) {
+        duplicateModeSelect.disabled = true;
+        phashDistanceSelect.disabled = true;
+        try {
+          await saveAndReloadSettings(raw, "Duplicate settings updated");
+        } catch (error) {
+          ui.toast(`Settings error: ${error.message}`, "#e06c75");
+          syncHeaderSettingsControls();
+        } finally {
+          duplicateModeSelect.disabled = false;
+          phashDistanceSelect.disabled = false;
+        }
+      }
+
+      duplicateModeSelect.addEventListener("change", () => changeHeaderSettings({ duplicateFinderMode: duplicateModeSelect.value }));
+      phashDistanceSelect.addEventListener("change", () => changeHeaderSettings({ phashDistanceMode: phashDistanceSelect.value }));
+      syncHeaderSettingsControls();
+
       const closeBtn = ui.mkBtn("✕", "#3e4451", () => overlay.remove());
       closeBtn.setAttribute("aria-label", "Close DupeFinder");
       const settingsBtn = ui.mkBtn("⚙", "#56b6c2", () => {
@@ -430,18 +505,11 @@
         settingsOverlay = tables.renderSettingsModal({
           settings: state.settings,
           async onSave(raw) {
-            state.settings = settingsStore.save(raw);
-            markDuplicateGroupsDirty();
-            refreshMultiDerivedState();
-            if (state.loaded) await showTab(state.currentTab);
-            ui.toast("Settings saved", "#56b6c2");
+            await saveAndReloadSettings(raw, "Settings saved");
           },
           async onReset() {
             state.settings = settingsStore.reset();
-            markDuplicateGroupsDirty();
-            refreshMultiDerivedState();
-            if (state.loaded) await showTab(state.currentTab);
-            ui.toast("Settings reset to defaults", "#56b6c2");
+            await reloadAfterSettingsChange("Settings reset to defaults");
           },
           onClose() {
             if (settingsOverlay && settingsOverlay.parentNode) settingsOverlay.remove();
@@ -451,7 +519,6 @@
       });
       settingsBtn.title = "Settings";
       settingsBtn.setAttribute("aria-label", "Open DupeFinder settings");
-      const controls = ui.el("div", "display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-left:auto;");
       modal.appendChild(header);
       header.appendChild(titleEl);
 
@@ -718,7 +785,7 @@
               actionColor: "#98c379",
               onRun: runMultiBatch,
               note: state.multiFileScenes.some(scene => analysis.hasLargeDurationMismatch(scene, state.settings))
-                ? `Scenes with file durations differing by more than ${state.settings.batchDurationDiffSeconds}s start excluded from the batch.`
+                ? `Scenes exceeding the ${helpers.durationDiffLimitLabel(state.settings.batchDurationDiffSeconds)} maximum duration difference start excluded from the batch.`
                 : "Exclude items you want to skip, then run the batch action.",
               isDisabled: () => state.multiFileScenes.filter(scene => isSceneBatchIncluded(scene)).length === 0,
             }));
@@ -780,7 +847,7 @@
               actionColor: "#61afef",
               onRun: runDuplicateBatch,
               note: state.settings.autoExcludeDuplicateUnsafe && state.dupGroups.some(group => isGroupUnsafe(group))
-                ? `Duplicate groups with duration diffs over ${state.settings.batchDurationDiffSeconds}s start excluded until confirmed.`
+                ? `Duplicate groups exceeding the ${helpers.durationDiffLimitLabel(state.settings.batchDurationDiffSeconds)} maximum duration difference start excluded until confirmed.`
                 : "Exclude items you want to skip, then run the batch action.",
               isDisabled: () => state.dupGroups.filter(group => isGroupIncluded(group)).length === 0,
             }));
@@ -847,6 +914,8 @@
       batchModeLabel.appendChild(batchModeBox);
       batchModeLabel.appendChild(document.createTextNode("Batch mode"));
 
+      controls.appendChild(duplicateModeControl);
+      controls.appendChild(phashDistanceControl);
       controls.appendChild(dryRunLabel);
       controls.appendChild(batchModeLabel);
       controls.appendChild(settingsBtn);
