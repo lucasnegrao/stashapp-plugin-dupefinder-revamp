@@ -19,9 +19,12 @@
 
   function sceneFragment(includeFingerprints) {
     return `
-      id title date organized
-      studio { name }
-      performers { name }
+      id title code details director urls date production_date rating100 organized
+      studio { id name }
+      performers { id name }
+      tags { id name }
+      galleries { id }
+      groups { scene_index group { id name } }
       files {
         id path basename size video_codec height duration
         ${includeFingerprints ? "fingerprints { type value }" : ""}
@@ -98,6 +101,31 @@
     gql,
     fetchAllScenes,
     fetchScene,
+    async fetchDuplicateScenes(distance) {
+      try {
+        const d = await gql(`
+          query FindDuplicateScenes($distance: Int) {
+            findDuplicateScenes(distance: $distance) {
+              ${sceneFragment(runtime.supportsFingerprints)}
+            }
+          }
+        `, { distance: Number(distance) });
+        return d.findDuplicateScenes || [];
+      } catch (error) {
+        if (runtime.supportsFingerprints && /fingerprints/i.test(String(error && error.message))) {
+          runtime.supportsFingerprints = false;
+          const d = await gql(`
+            query FindDuplicateScenes($distance: Int) {
+              findDuplicateScenes(distance: $distance) {
+                ${sceneFragment(false)}
+              }
+            }
+          `, { distance: Number(distance) });
+          return d.findDuplicateScenes || [];
+        }
+        throw error;
+      }
+    },
     async destroyScene(id, deleteFile) {
       return gql(`
         mutation SceneDestroy($input: SceneDestroyInput!) {
@@ -125,6 +153,31 @@
           sceneUpdate(input: $input) { id }
         }
       `, { input: { id: String(sceneId), primary_file_id: String(fileId) } });
+    },
+    async createScene(input) {
+      try {
+        const d = await gql(`
+          mutation SceneCreate($input: SceneCreateInput!) {
+            sceneCreate(input: $input) {
+              ${sceneFragment(runtime.supportsFingerprints)}
+            }
+          }
+        `, { input });
+        return d.sceneCreate;
+      } catch (error) {
+        if (runtime.supportsFingerprints && /fingerprints/i.test(String(error && error.message))) {
+          runtime.supportsFingerprints = false;
+          const d = await gql(`
+            mutation SceneCreate($input: SceneCreateInput!) {
+              sceneCreate(input: $input) {
+                ${sceneFragment(false)}
+              }
+            }
+          `, { input });
+          return d.sceneCreate;
+        }
+        throw error;
+      }
     },
   };
 })();

@@ -6,15 +6,16 @@ A [Stash](https://github.com/stashapp/stash) plugin that finds duplicate scenes 
 
 ## Features
 
-- **Duplicate detection** — finds scenes sharing the same title + date + studio combination
+- **Duplicate detection** — uses pHash distance first, with the original metadata/title matcher kept as a legacy fallback for scenes without pHash
 - **Multi-file scene detection** — finds scenes that have more than one file attached
 - **Click-to-keep selection** — click any file row or duplicate-scene row to choose exactly what should be kept
 - **Consistent keep labeling** — the selected keeper is always marked **keep** so the UI reflects your choice
 - **Batch mode for both tabs** — exclude any scene/group from the batch, then apply keep or merge to everything still included
 - **Safer batch defaults** — multi-file scenes and duplicate groups with large duration diffs start excluded from batch mode until you explicitly confirm them
-- **Settings modal** — configure duplicate distance, best-selection algorithm, batch safety threshold, and additional behavior toggles
+- **Settings modal** — configure pHash distance, legacy fallback distance, best-selection algorithm, batch safety threshold, and additional behavior toggles
 - **Stable table layout** — fixed-width columns on both tabs with Actions first, plus pHash on both tables and Duration in duplicates
 - **Keep selected file cleanup** — in the Multi-file tab, keep the selected file and delete the rest without deleting the scene
+- **Split multi-file scenes** — unmerge a scene by keeping the selected file on the original scene and moving each other file into its own new scene
 - **Merge duplicates into selected keep** — in the Duplicates tab, merge the rest of the group into the selected keep scene
 - **Dry run / preview mode** — preview cleanup, delete, merge, and batch actions before anything destructive happens
 - **Batch progress + abort** — batch runs lock the modal, show progress, and can abort the remaining items without undoing completed actions
@@ -41,7 +42,7 @@ A [Stash](https://github.com/stashapp/stash) plugin that finds duplicate scenes 
 2. The plugin loads all scenes from your library (progress shown while loading)
 3. Optional: enable **Dry run / preview mode** in the modal header to preview destructive actions before executing them
 4. Optional: enable **Batch mode** to work through many scenes/groups at once while excluding anything you want to skip
-5. Optional: open **⚙ Settings** in the modal header to tune grouping/ranking behavior and safety defaults
+5. Optional: open **⚙** in the modal header to tune grouping/ranking behavior and safety defaults
 6. Two tabs are shown:
 
 ### Multi-file tab
@@ -49,13 +50,14 @@ Lists every scene that has more than one file attached, sorted by file count. Cl
 
 Available actions:
 - **🧹 Keep** — keeps the currently selected file, safely makes it the scene's primary file if needed, and deletes the other files from disk
+- **✂ Split** — keeps the selected file on the current scene and creates new scenes for the remaining files using copied scene metadata
 - **🗑 Delete scene** — deletes the whole scene and all its files
 - In **Batch mode**, exclude any scenes you want to skip, then run **Keep selected in batch** to apply the chosen keep file across all included scenes
 - Scenes whose file durations differ by more than the configured safety threshold start **Excluded** in batch mode and ask for confirmation before being re-added
 - In **Dry run / preview mode**, these actions show what would be kept or deleted without making changes
 
 ### Duplicates tab
-Lists groups of scenes that share the same title + date + studio. Click any scene row to choose the scene to **keep** before merging.
+Lists groups of scenes that match by pHash distance. If a scene has no pHash, it falls back to the legacy title/date/studio matcher. Click any scene row to choose the scene to **keep** before merging.
 
 Available actions:
 - **⚡ Merge** — merges the rest of the selected duplicate group into the currently selected keep scene, combining metadata
@@ -70,14 +72,14 @@ Available actions:
 ## How duplicates are detected
 
 Two scenes are considered duplicates when:
-- Date + Studio match, and titles are compatible by the configured distance (or one side has no title), or
-- Metadata is missing and titles match by the configured distance
+- Their pHashes are within the configured Hamming distance, or
+- One or both scenes are missing pHash data and the legacy matcher decides they match
 
-The title comparison can be tuned in **⚙ Settings** using a default Levenshtein distance:
-- `0` keeps strict exact-title matching
-- Higher values allow slightly different titles to cluster together
+The duplicate settings can be tuned in **⚙**:
+- **pHash distance** controls how similar pHashes must be (`0` is strictest)
+- **Legacy title distance** controls the Levenshtein fallback used only for scenes without pHash
 
-Scenes with no title and no date+studio combination are excluded from duplicate detection.
+Legacy fallback scenes with no title and no date+studio combination are excluded from duplicate detection.
 
 ---
 
