@@ -208,7 +208,11 @@
       if (scene.date) hdr.appendChild(ui.el("span", "color:#5c6370;font-size:0.85em;", scene.date));
       if (scene.studio) hdr.appendChild(ui.el("span", "color:#5c6370;font-size:0.85em;", scene.studio.name));
       hdr.appendChild(ui.el("span", "flex:1;"));
-      if (batchMode) hdr.appendChild(ui.mkBtn(included ? "➖ Exclude from batch" : "➕ Include in batch", included ? "#5c6370" : "#56b6c2", () => onToggleSceneBatch(scene.id)));
+      if (batchMode) {
+        const toggleBtn = ui.mkBtn(included ? "➖ Exclude from batch" : "➕ Include in batch", included ? "#5c6370" : "#56b6c2", () => onToggleSceneBatch(scene.id));
+        toggleBtn.setAttribute("aria-pressed", included ? "true" : "false");
+        hdr.appendChild(toggleBtn);
+      }
       sceneWrap.appendChild(hdr);
 
       const table = headerTable(root.defaults.columns.multi);
@@ -297,7 +301,11 @@
       if (first.date) hdr.appendChild(ui.el("span", "color:#5c6370;font-size:0.85em;", first.date));
       if (first.studio) hdr.appendChild(ui.el("span", "color:#5c6370;font-size:0.85em;", first.studio.name));
       hdr.appendChild(ui.el("span", "flex:1;"));
-      if (batchMode) hdr.appendChild(ui.mkBtn(included ? "➖ Exclude from batch" : "➕ Include in batch", included ? "#5c6370" : "#56b6c2", () => onToggleGroupBatch(group.key)));
+      if (batchMode) {
+        const toggleBtn = ui.mkBtn(included ? "➖ Exclude from batch" : "➕ Include in batch", included ? "#5c6370" : "#56b6c2", () => onToggleGroupBatch(group.key));
+        toggleBtn.setAttribute("aria-pressed", included ? "true" : "false");
+        hdr.appendChild(toggleBtn);
+      }
       groupWrap.appendChild(hdr);
 
       const table = headerTable(root.defaults.columns.dupes);

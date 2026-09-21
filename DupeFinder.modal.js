@@ -705,7 +705,7 @@
         state.observer = new MutationObserver(() => {
           if (!document.getElementById(constants.BTN_ID)) injectButton();
         });
-        state.observer.observe(document.body, { childList: true, subtree: false });
+        state.observer.observe(document.body, { childList: true, subtree: true });
       };
 
       if (document.readyState === "complete" || document.readyState === "interactive") injectButton();
