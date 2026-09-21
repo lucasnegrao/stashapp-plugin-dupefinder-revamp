@@ -7,11 +7,6 @@
   function headerTable(columns) {
     const table = ui.el("table", STYLE.table);
     table.appendChild(ui.renderColgroup(columns));
-    const thead = document.createElement("thead");
-    const tr = document.createElement("tr");
-    columns.forEach(c => tr.appendChild(ui.el("th", STYLE.th, c.label)));
-    thead.appendChild(tr);
-    table.appendChild(thead);
     return table;
   }
 
@@ -45,7 +40,7 @@
       ? `${includedCount} of ${totalCount} ${itemLabel} in the batch`
       : `No ${itemLabel} included in the batch`;
     bar.appendChild(ui.el("div", "color:#abb2bf;font-size:0.85em;font-weight:600;", summary));
-    bar.appendChild(ui.el("div", "color:#5c6370;font-size:0.8em;", note || "Exclude items you want to skip, then run the batch action."));
+    bar.appendChild(ui.el("div", STYLE.hintText + "font-size:0.8em;", note || "Exclude items you want to skip, then run the batch action."));
     bar.appendChild(ui.el("span", "flex:1;"));
 
     actions.forEach(action => {
@@ -92,7 +87,7 @@
     ["balanced", "quality", "size"].forEach(option => {
       const opt = document.createElement("option");
       opt.value = option;
-      opt.textContent = option;
+      opt.textContent = option.charAt(0).toUpperCase() + option.slice(1);
       if (option === settings.bestAlgorithm) opt.selected = true;
       algoSelect.appendChild(opt);
     });
@@ -124,14 +119,14 @@
       const wrap = ui.el("label", "display:flex;flex-direction:column;gap:4px;color:#abb2bf;font-size:0.82em;");
       wrap.appendChild(ui.el("span", "font-weight:600;", label));
       wrap.appendChild(control);
-      if (hint) wrap.appendChild(ui.el("span", "color:#5c6370;font-size:0.78em;", hint));
+      if (hint) wrap.appendChild(ui.el("span", STYLE.hintText + "font-size:0.78em;", hint));
       return wrap;
     }
 
     const legacyDistanceField = field("Legacy title distance", legacyDistanceInput, "Used in legacy mode or as the fallback pass only for scenes without pHash. 0 means strict title matching; higher values broaden title-only and same-meta title matching.");
 
     form.appendChild(legacyDistanceField);
-    form.appendChild(field("Best algorithm", algoSelect, "balanced/quality/size ranking for keep selection."));
+    form.appendChild(field("Automatic keep selection", algoSelect, "Choose how DupeFinder automatically selects the file or scene to keep: Balanced, Quality, or Size."));
     form.appendChild(field("Maximum duration difference", batchDiffSelect, "Any allows every duration difference. Equal requires matching durations; the other choices set the maximum allowed difference."));
 
     const unsafeLabel = ui.el("label", "display:flex;align-items:center;gap:8px;color:#abb2bf;font-size:0.82em;");
@@ -198,10 +193,10 @@
       onSplitScene,
     } = opts;
 
-    if (!scenes.length) return ui.el("div", "color:#5c6370;padding:20px 0;text-align:center;", "No multi-file scenes found ✓");
+    if (!scenes.length) return ui.el("div", STYLE.hintText + "padding:20px 0;text-align:center;", "No multi-file scenes found ✓");
 
     const wrap = document.createElement("div");
-    wrap.appendChild(ui.el("div", "color:#5c6370;font-size:0.83em;margin-bottom:6px;", `${scenes.length} scene${scenes.length !== 1 ? "s" : ""} with multiple files`));
+    wrap.appendChild(ui.el("div", STYLE.hintText + "font-size:0.83em;margin-bottom:6px;", `${scenes.length} scene${scenes.length !== 1 ? "s" : ""} with multiple files`));
     wrap.appendChild(ui.el("div", STYLE.rowHint, "Click a row to choose which file to keep; click the selected row again to clear it."));
 
     for (const scene of scenes) {
@@ -223,11 +218,13 @@
       link.textContent = scene.title || "(untitled)";
       link.addEventListener("click", ui.stopRowSelection);
       hdr.appendChild(link);
+      const headingDetails = [scene.date, scene.studio && scene.studio.name].filter(Boolean);
+      if (headingDetails.length) {
+        hdr.appendChild(ui.el("span", "color:#e5c07b;font-size:1em;font-weight:600;", `— ${headingDetails.join(" — ")}`));
+      }
       hdr.appendChild(ui.el("span", STYLE.badge + "background:#e06c75;color:#fff;", `${scene.files.length} files`));
       if (hasDurationMismatch) hdr.appendChild(ui.el("span", STYLE.badge + "background:#e5c07b;color:#21252b;", `Duration diff ${durationDiffSeconds}s`));
       if (batchMode) hdr.appendChild(ui.el("span", STYLE.badge + `${included ? "background:#98c379;color:#21252b;" : "background:#5c6370;color:#fff;"}`, included ? "In batch" : "Excluded"));
-      if (scene.date) hdr.appendChild(ui.el("span", "color:#5c6370;font-size:0.85em;", scene.date));
-      if (scene.studio) hdr.appendChild(ui.el("span", "color:#5c6370;font-size:0.85em;", scene.studio.name));
       hdr.appendChild(ui.el("span", "flex:1;"));
       if (batchMode) {
         const toggleBtn = ui.mkBtn(included ? "➖ Exclude from batch" : "➕ Include in batch", included ? "#5c6370" : "#56b6c2", () => onToggleSceneBatch(scene.id));
@@ -297,10 +294,10 @@
       onMergeGroup,
     } = opts;
 
-    if (!groups.length) return ui.el("div", "color:#5c6370;padding:20px 0;text-align:center;", "No duplicate scenes found ✓");
+    if (!groups.length) return ui.el("div", STYLE.hintText + "padding:20px 0;text-align:center;", "No duplicate scenes found ✓");
 
     const wrap = document.createElement("div");
-    wrap.appendChild(ui.el("div", "color:#5c6370;font-size:0.83em;margin-bottom:6px;", `${groups.length} group${groups.length !== 1 ? "s" : ""} of duplicates (${groups.reduce((n, g) => n + g.scenes.length, 0)} scenes total)`));
+    wrap.appendChild(ui.el("div", STYLE.hintText + "font-size:0.83em;margin-bottom:6px;", `${groups.length} group${groups.length !== 1 ? "s" : ""} of duplicates (${groups.reduce((n, g) => n + g.scenes.length, 0)} scenes total)`));
     wrap.appendChild(ui.el("div", STYLE.rowHint, "Click a scene row to choose which scene to keep."));
 
     for (const group of groups) {
@@ -313,13 +310,16 @@
       const diff = Math.round(analysis.groupDurationDiffSeconds(group, settings));
 
       const hdr = ui.el("div", STYLE.groupHdr);
-      hdr.appendChild(ui.el("span", "font-size:1em;color:#e5c07b;font-weight:700;", (first.title || "(untitled)").trim()));
+      const headingText = [
+        (first.title || "(untitled)").trim(),
+        first.date,
+        first.studio && first.studio.name,
+      ].filter(Boolean).join(" — ");
+      hdr.appendChild(ui.el("span", "font-size:1em;color:#e5c07b;font-weight:700;", headingText));
       hdr.appendChild(ui.el("span", STYLE.badge + "background:#c678dd;color:#fff;", `${group.scenes.length} scenes`));
       hdr.appendChild(ui.el("span", STYLE.badge + `${group.method === "legacy" ? "background:#d19a66;color:#21252b;" : "background:#61afef;color:#21252b;"}`, group.method === "legacy" ? "Legacy" : "pHash"));
       if (unsafe) hdr.appendChild(ui.el("span", STYLE.badge + "background:#e5c07b;color:#21252b;", `Duration diff ${diff}s`));
       if (batchMode) hdr.appendChild(ui.el("span", STYLE.badge + `${included ? "background:#98c379;color:#21252b;" : "background:#5c6370;color:#fff;"}`, included ? "In batch" : "Excluded"));
-      if (first.date) hdr.appendChild(ui.el("span", "color:#5c6370;font-size:0.85em;", first.date));
-      if (first.studio) hdr.appendChild(ui.el("span", "color:#5c6370;font-size:0.85em;", first.studio.name));
       hdr.appendChild(ui.el("span", "flex:1;"));
       if (batchMode) {
         const toggleBtn = ui.mkBtn(included ? "➖ Exclude from batch" : "➕ Include in batch", included ? "#5c6370" : "#56b6c2", () => onToggleGroupBatch(group.key));

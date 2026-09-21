@@ -465,7 +465,7 @@
       const titleEl = ui.el("span", "color:#e5c07b;font-weight:700;font-size:1.1em;justify-self:start;align-self:center;white-space:nowrap;", "🔍 DupeFinder");
       const controls = ui.el("div", "display:flex;align-items:center;align-self:center;justify-content:center;gap:18px;flex-wrap:nowrap;");
       const headerActions = ui.el("div", "display:flex;align-items:center;align-self:center;justify-self:end;gap:10px;");
-      const headerSelectStyle = "box-sizing:border-box;width:110px;height:38px;background:#2c313a;border:1px solid #3e4451;color:#abb2bf;border-radius:4px;padding:0 10px;font-size:0.85em;";
+      const headerSelectStyle = "box-sizing:border-box;width:110px;height:38px;background:#2c313a;border:1px solid #3e4451;color:#abb2bf;border-radius:4px;padding:0 10px;font-size:0.8em;";
 
       const duplicateModeSelect = document.createElement("select");
       [
@@ -484,26 +484,16 @@
       constants.PHASH_DISTANCE_PRESETS.forEach(option => {
         const opt = document.createElement("option");
         opt.value = option.value;
-        opt.textContent = `${option.label} (${option.distance})`;
+        opt.textContent = option.label;
         phashDistanceSelect.appendChild(opt);
       });
       phashDistanceSelect.style.cssText = headerSelectStyle;
       phashDistanceSelect.setAttribute("aria-label", "pHash distance");
 
-      function headerSelect(label, select) {
-        const wrap = ui.el("label", "display:flex;align-items:center;height:38px;gap:8px;color:#abb2bf;font-size:0.85em;white-space:nowrap;margin:0;");
-        wrap.appendChild(document.createTextNode(label));
-        wrap.appendChild(select);
-        return wrap;
-      }
-
-      const duplicateModeControl = headerSelect("Mode", duplicateModeSelect);
-      const phashDistanceControl = headerSelect("pHash distance", phashDistanceSelect);
-
       function syncHeaderSettingsControls() {
         duplicateModeSelect.value = state.settings.duplicateFinderMode;
         phashDistanceSelect.value = state.settings.phashDistanceMode;
-        phashDistanceControl.style.display = state.settings.duplicateFinderMode === "phash" ? "flex" : "none";
+        phashDistanceSelect.style.display = state.settings.duplicateFinderMode === "phash" ? "block" : "none";
       }
 
       async function reloadAfterSettingsChange(message) {
@@ -581,7 +571,7 @@
 
       const body = ui.el("div", STYLE.body);
       modal.appendChild(body);
-      const loadingEl = ui.el("div", "color:#5c6370;padding:40px 0;text-align:center;font-size:0.9em;", "Loading scenes… 0 / ?");
+      const loadingEl = ui.el("div", STYLE.hintText + "padding:40px 0;text-align:center;font-size:0.9em;", "Loading scenes… 0 / ?");
       body.appendChild(loadingEl);
 
       let settingsOverlay = null;
@@ -982,7 +972,7 @@
           }));
         } else {
           body.innerHTML = "";
-          body.appendChild(ui.el("div", "color:#5c6370;padding:20px 0;text-align:center;font-size:0.9em;", "Loading duplicate groups…"));
+          body.appendChild(ui.el("div", STYLE.hintText + "padding:20px 0;text-align:center;font-size:0.9em;", "Loading duplicate groups…"));
           await refreshDuplicateGroups();
           if (state.currentTab !== "dupes") return;
           body.innerHTML = "";
@@ -1081,8 +1071,8 @@
       });
       batchBtn.title = "Apply actions to multiple included items";
 
-      controls.appendChild(duplicateModeControl);
-      controls.appendChild(phashDistanceControl);
+      controls.appendChild(duplicateModeSelect);
+      controls.appendChild(phashDistanceSelect);
       controls.appendChild(previewBtn);
       controls.appendChild(batchBtn);
       headerActions.appendChild(settingsBtn);

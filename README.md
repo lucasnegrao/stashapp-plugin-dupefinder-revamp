@@ -13,7 +13,7 @@ A [Stash](https://github.com/stashapp/stash) plugin that finds duplicate scenes 
 - **Batch mode for both tabs** — exclude any scene/group from the batch, then apply keep or merge to everything still included
 - **Safer batch defaults** — multi-file scenes and duplicate groups with large duration diffs start excluded from batch mode until you explicitly confirm them
 - **Immediate duplicate controls** — switch duplicate mode and pHash distance from the main modal header; changes save and refresh results automatically
-- **Settings modal** — configure legacy fallback distance, best-selection algorithm, maximum duration difference, and additional behavior toggles
+- **Settings modal** — configure legacy fallback distance, automatic keep selection, maximum duration difference, and additional behavior toggles
 - **Stable table layout** — fixed-width columns on both tabs with Actions first, plus pHash on both tables and Duration in duplicates
 - **Keep selected file cleanup** — in the Multi-file tab, keep the selected file and delete the rest without deleting the scene
 - **Split multi-file scenes** — keep the selected file on the original scene and move every other file into a scene without copied metadata, or clear the keep selection so no file reuses the original metadata

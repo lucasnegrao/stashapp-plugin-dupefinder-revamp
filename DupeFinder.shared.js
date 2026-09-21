@@ -49,7 +49,8 @@
       link: "color:#61afef;text-decoration:none;cursor:pointer;",
       keepBadge: "display:inline-block;padding:1px 6px;border-radius:3px;font-size:0.75em;background:#98c379;color:#21252b;font-weight:700;margin-left:4px;vertical-align:middle;",
       batchBar: "display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:#2c313a;border:1px solid #3e4451;border-radius:6px;padding:10px 12px;margin-bottom:12px;",
-      rowHint: "color:#5c6370;font-size:0.8em;margin-bottom:10px;",
+      hintText: "color:#9aa3b2;",
+      rowHint: "color:#9aa3b2;font-size:0.8em;margin-bottom:10px;",
     },
     columns: {
       multi: [
