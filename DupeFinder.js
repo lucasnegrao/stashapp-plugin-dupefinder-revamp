@@ -261,8 +261,14 @@
 
           cleanBtn.textContent = "Cleaning…"; cleanBtn.disabled = true;
           try {
-            await setScenePrimaryFile(scene.id, keeper.id);
-            await deleteFiles(extraFiles.map(f => f.id));
+            const extraFileIds = extraFiles.map(f => f.id);
+            try {
+              await deleteFiles(extraFileIds);
+            } catch (e) {
+              if (!/cannot delete primary file/i.test(e.message || "")) throw e;
+              await setScenePrimaryFile(scene.id, keeper.id);
+              await deleteFiles(extraFileIds);
+            }
             scene.files = [keeper];
             onSceneCleaned(scene);
             toast(`Kept best file for scene #${scene.id}`, "#98c379");
