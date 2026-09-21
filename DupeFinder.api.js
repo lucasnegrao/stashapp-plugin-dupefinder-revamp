@@ -29,8 +29,15 @@
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ query, variables: variables || {} }),
     });
+    const data = await res.json().catch(() => null);
+    if (data && data.errors && data.errors.length) {
+      const error = new Error(data.errors.map(e => e.message).join(", "));
+      error.status = res.status;
+      error.graphQLErrors = data.errors;
+      throw error;
+    }
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data = await res.json();
+    if (!data) throw new Error("Invalid GraphQL response");
     if (data.errors && data.errors.length) throw new Error(data.errors.map(e => e.message).join(", "));
     return data.data;
   }

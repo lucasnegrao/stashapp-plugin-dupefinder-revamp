@@ -7,10 +7,18 @@
     BTN_ID: "df-button",
     SETTINGS_KEY: "df-settings-v2",
     CODEC_RANK: ["av1", "hevc", "h265", "vp9", "h264", "avc", "mpeg4", "mpeg2"],
+    PHASH_DISTANCE_PRESETS: [
+      { value: "exact", label: "Exact", distance: 0, meaning: "All pHash bits must match" },
+      { value: "high", label: "High", distance: 4, meaning: "Up to 4 differing bits" },
+      { value: "medium", label: "Medium", distance: 8, meaning: "Up to 8 differing bits" },
+      { value: "low", label: "Low", distance: 10, meaning: "Up to 10 differing bits" },
+    ],
   };
 
   root.defaults = {
     settings: {
+      duplicateFinderMode: "phash",
+      phashDistanceMode: "exact",
       phashDistance: 0,
       legacyDistance: 0,
       bestAlgorithm: "balanced",
@@ -148,15 +156,33 @@
   };
 
   root.settings = {
+    phashPresetForDistance(distance) {
+      const presets = root.constants.PHASH_DISTANCE_PRESETS;
+      const numeric = Number(distance);
+      const exact = presets.find(preset => preset.distance === numeric);
+      return (exact || presets[0]).value;
+    },
+    phashDistanceForPreset(presetValue) {
+      const preset = root.constants.PHASH_DISTANCE_PRESETS.find(item => item.value === presetValue);
+      return preset ? preset.distance : root.constants.PHASH_DISTANCE_PRESETS[0].distance;
+    },
     normalize(raw) {
       const defaults = root.defaults.settings;
       const candidate = raw || {};
-      const phashDistance = Number(candidate.phashDistance);
+      const duplicateFinderMode = ["phash", "legacy"].includes(candidate.duplicateFinderMode)
+        ? candidate.duplicateFinderMode
+        : defaults.duplicateFinderMode;
+      const phashDistanceMode = root.constants.PHASH_DISTANCE_PRESETS.some(preset => preset.value === candidate.phashDistanceMode)
+        ? candidate.phashDistanceMode
+        : this.phashPresetForDistance(candidate.phashDistance);
+      const phashDistance = this.phashDistanceForPreset(phashDistanceMode);
       const legacyDistance = Number(candidate.legacyDistance !== undefined ? candidate.legacyDistance : candidate.defaultDistance);
       const threshold = Number(candidate.batchDurationDiffSeconds);
       const algo = String(candidate.bestAlgorithm || defaults.bestAlgorithm);
       const bestAlgorithm = ["balanced", "quality", "size"].includes(algo) ? algo : defaults.bestAlgorithm;
       return {
+        duplicateFinderMode,
+        phashDistanceMode,
         phashDistance: Number.isFinite(phashDistance) ? Math.max(0, Math.min(64, Math.round(phashDistance))) : defaults.phashDistance,
         legacyDistance: Number.isFinite(legacyDistance) ? Math.max(0, Math.min(10, Math.round(legacyDistance))) : defaults.legacyDistance,
         bestAlgorithm,

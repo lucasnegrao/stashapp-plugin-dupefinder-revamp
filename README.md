@@ -6,13 +6,13 @@ A [Stash](https://github.com/stashapp/stash) plugin that finds duplicate scenes 
 
 ## Features
 
-- **Duplicate detection** — uses pHash distance first, with the original metadata/title matcher kept as a legacy fallback for scenes without pHash
+- **Duplicate detection modes** — switch between pHash-first matching with legacy fallback for missing pHashes, or legacy-only title/date/studio matching
 - **Multi-file scene detection** — finds scenes that have more than one file attached
 - **Click-to-keep selection** — click any file row or duplicate-scene row to choose exactly what should be kept
 - **Consistent keep labeling** — the selected keeper is always marked **keep** so the UI reflects your choice
 - **Batch mode for both tabs** — exclude any scene/group from the batch, then apply keep or merge to everything still included
 - **Safer batch defaults** — multi-file scenes and duplicate groups with large duration diffs start excluded from batch mode until you explicitly confirm them
-- **Settings modal** — configure pHash distance, legacy fallback distance, best-selection algorithm, batch safety threshold, and additional behavior toggles
+- **Settings modal** — configure duplicate finder mode, pHash distance presets, legacy fallback distance, best-selection algorithm, batch safety threshold, and additional behavior toggles
 - **Stable table layout** — fixed-width columns on both tabs with Actions first, plus pHash on both tables and Duration in duplicates
 - **Keep selected file cleanup** — in the Multi-file tab, keep the selected file and delete the rest without deleting the scene
 - **Split multi-file scenes** — unmerge a scene by keeping the selected file on the original scene and moving each other file into its own new scene
@@ -57,7 +57,7 @@ Available actions:
 - In **Dry run / preview mode**, these actions show what would be kept or deleted without making changes
 
 ### Duplicates tab
-Lists groups of scenes that match by pHash distance. If a scene has no pHash, it falls back to the legacy title/date/studio matcher. Click any scene row to choose the scene to **keep** before merging.
+Lists groups of scenes using the selected duplicate finder mode. In **pHash** mode, scenes match by pHash distance and scenes without pHash fall back to the legacy title/date/studio matcher. In **Legacy** mode, all duplicate matching uses the legacy matcher. Click any scene row to choose the scene to **keep** before merging.
 
 Available actions:
 - **⚡ Merge** — merges the rest of the selected duplicate group into the currently selected keep scene, combining metadata
@@ -72,11 +72,12 @@ Available actions:
 ## How duplicates are detected
 
 Two scenes are considered duplicates when:
-- Their pHashes are within the configured Hamming distance, or
-- One or both scenes are missing pHash data and the legacy matcher decides they match
+- In **pHash** mode, their pHashes are within the configured Hamming distance, or one or both scenes are missing pHash data and the legacy matcher decides they match
+- In **Legacy** mode, the legacy matcher decides they match based on title and/or date+studio
 
 The duplicate settings can be tuned in **⚙**:
-- **pHash distance** controls how similar pHashes must be (`0` is strictest)
+- **Duplicate finder mode** switches between `pHash` and `Legacy`
+- **pHash distance** uses presets: `Exact (0)`, `High (4)`, `Medium (8)`, `Low (10)`
 - **Legacy title distance** controls the Levenshtein fallback used only for scenes without pHash
 
 Legacy fallback scenes with no title and no date+studio combination are excluded from duplicate detection.

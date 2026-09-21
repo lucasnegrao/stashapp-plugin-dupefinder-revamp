@@ -75,20 +75,37 @@
     panel.appendChild(title);
 
     const form = ui.el("div", "display:grid;grid-template-columns:1fr 1fr;gap:10px;");
+    const controlStyle = "width:100%;background:#21252b;border:1px solid #3e4451;color:#abb2bf;border-radius:4px;padding:6px;";
 
-    const distanceInput = document.createElement("input");
-    distanceInput.type = "number";
-    distanceInput.min = "0";
-    distanceInput.max = "64";
-    distanceInput.value = String(settings.phashDistance);
-    distanceInput.style.cssText = "width:100%;background:#21252b;border:1px solid #3e4451;color:#abb2bf;border-radius:4px;padding:6px;";
+    const duplicateModeSelect = document.createElement("select");
+    [
+      { value: "phash", label: "pHash" },
+      { value: "legacy", label: "Legacy" },
+    ].forEach(option => {
+      const opt = document.createElement("option");
+      opt.value = option.value;
+      opt.textContent = option.label;
+      if (option.value === settings.duplicateFinderMode) opt.selected = true;
+      duplicateModeSelect.appendChild(opt);
+    });
+    duplicateModeSelect.style.cssText = controlStyle;
+
+    const distanceInput = document.createElement("select");
+    root.constants.PHASH_DISTANCE_PRESETS.forEach(option => {
+      const opt = document.createElement("option");
+      opt.value = option.value;
+      opt.textContent = `${option.label} (${option.distance}) — ${option.meaning}`;
+      if (option.value === settings.phashDistanceMode) opt.selected = true;
+      distanceInput.appendChild(opt);
+    });
+    distanceInput.style.cssText = controlStyle;
 
     const legacyDistanceInput = document.createElement("input");
     legacyDistanceInput.type = "number";
     legacyDistanceInput.min = "0";
     legacyDistanceInput.max = "10";
     legacyDistanceInput.value = String(settings.legacyDistance);
-    legacyDistanceInput.style.cssText = distanceInput.style.cssText;
+    legacyDistanceInput.style.cssText = controlStyle;
 
     const algoSelect = document.createElement("select");
     ["balanced", "quality", "size"].forEach(option => {
@@ -98,14 +115,14 @@
       if (option === settings.bestAlgorithm) opt.selected = true;
       algoSelect.appendChild(opt);
     });
-    algoSelect.style.cssText = distanceInput.style.cssText;
+    algoSelect.style.cssText = controlStyle;
 
     const batchDiffInput = document.createElement("input");
     batchDiffInput.type = "number";
     batchDiffInput.min = "0";
     batchDiffInput.max = "3600";
     batchDiffInput.value = String(settings.batchDurationDiffSeconds);
-    batchDiffInput.style.cssText = distanceInput.style.cssText;
+    batchDiffInput.style.cssText = controlStyle;
 
     const unsafeBox = document.createElement("input");
     unsafeBox.type = "checkbox";
@@ -123,10 +140,29 @@
       return wrap;
     }
 
-    form.appendChild(field("pHash distance", distanceInput, "Maximum Hamming distance for pHash duplicate grouping. Lower values are stricter."));
-    form.appendChild(field("Legacy title distance", legacyDistanceInput, "Used only when a scene has no pHash. 0 means strict title matching; higher values broaden title-only and same-meta title matching."));
+    const duplicateModeField = field("Duplicate finder mode", duplicateModeSelect, "Switch between pHash-first matching with legacy fallback, or legacy-only title/date/studio matching.");
+    const phashDistanceField = field("pHash distance", distanceInput, "Preset maximum Hamming distance for pHash duplicate grouping.");
+    const legacyDistanceField = field("Legacy title distance", legacyDistanceInput, "Used only in legacy mode or as fallback when a scene has no pHash. 0 means strict title matching; higher values broaden title-only and same-meta title matching.");
+
+    form.appendChild(duplicateModeField);
+    form.appendChild(phashDistanceField);
+    form.appendChild(legacyDistanceField);
     form.appendChild(field("Best algorithm", algoSelect, "balanced/quality/size ranking for keep selection."));
     form.appendChild(field("Batch duration safety (seconds)", batchDiffInput, "Unsafe groups/scenes start excluded when diff exceeds this."));
+
+    function setFieldEnabled(fieldWrap, control, enabled) {
+      fieldWrap.style.opacity = enabled ? "1" : "0.6";
+      control.disabled = !enabled;
+    }
+
+    function syncDuplicateModeFields() {
+      const phashMode = duplicateModeSelect.value === "phash";
+      setFieldEnabled(phashDistanceField, distanceInput, phashMode);
+      setFieldEnabled(legacyDistanceField, legacyDistanceInput, true);
+    }
+
+    duplicateModeSelect.addEventListener("change", syncDuplicateModeFields);
+    syncDuplicateModeFields();
 
     const unsafeLabel = ui.el("label", "display:flex;align-items:center;gap:8px;color:#abb2bf;font-size:0.82em;");
     unsafeLabel.appendChild(unsafeBox);
@@ -154,7 +190,8 @@
       errEl.style.display = "none";
       try {
         await onSave({
-          phashDistance: Number(distanceInput.value),
+          duplicateFinderMode: duplicateModeSelect.value,
+          phashDistanceMode: distanceInput.value,
           legacyDistance: Number(legacyDistanceInput.value),
           bestAlgorithm: algoSelect.value,
           batchDurationDiffSeconds: Number(batchDiffInput.value),

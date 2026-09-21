@@ -104,6 +104,12 @@
 
     async function refreshDuplicateGroups(force) {
       if (!force && !state.duplicateGroupsDirty) return;
+      if (state.settings.duplicateFinderMode === "legacy") {
+        state.dupGroups = analysis.findLegacyDuplicateScenes(state.allScenes, state.settings);
+        state.duplicateGroupsDirty = false;
+        refreshDuplicateSelections();
+        return;
+      }
       let phashGroups = [];
       try {
         const rawGroups = await api.fetchDuplicateSceneGroups(state.settings.phashDistance);
