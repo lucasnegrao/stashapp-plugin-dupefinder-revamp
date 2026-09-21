@@ -2,7 +2,11 @@
   "use strict";
   const root = window.DupeFinder = window.DupeFinder || {};
 
-  const runtime = { supportsFingerprints: true, supportsSceneSplit: null };
+  const runtime = {
+    supportsFingerprints: true,
+    supportsExtendedSceneFields: true,
+    supportsSceneSplit: null,
+  };
   root.runtime = runtime;
 
   async function gql(query, variables) {
@@ -17,14 +21,18 @@
     return data.data;
   }
 
-  function sceneFragment(includeFingerprints) {
+  function sceneFragment(includeFingerprints, includeExtendedFields) {
+    const extendedFields = includeExtendedFields ? `
+      code details director urls production_date rating100
+      galleries { id }
+      groups { scene_index group { id name } }
+    ` : "";
     return `
-      id title code details director urls date production_date rating100 organized
+      id title date organized
       studio { id name }
       performers { id name }
       tags { id name }
-      galleries { id }
-      groups { scene_index group { id name } }
+      ${extendedFields}
       files {
         id path basename size video_codec height duration
         ${includeFingerprints ? "fingerprints { type value }" : ""}
@@ -32,8 +40,35 @@
     `;
   }
 
-  async function queryScenesPage(filter, includeFingerprints) {
-    const fragment = sceneFragment(includeFingerprints);
+  function supportsExtendedFieldFallback(error) {
+    const message = String((error && error.message) || "");
+    if (!runtime.supportsExtendedSceneFields) return false;
+    if (!/(Cannot query field|Unknown field|Unknown argument|does not exist)/i.test(message)) return false;
+    return /(code|details|director|urls|production_date|rating100|galleries|groups|scene_index)/i.test(message);
+  }
+
+  async function withSceneCompatibility(runQuery) {
+    for (let i = 0; i < 3; i++) {
+      try {
+        return await runQuery(runtime.supportsFingerprints, runtime.supportsExtendedSceneFields);
+      } catch (error) {
+        const message = String((error && error.message) || "");
+        if (runtime.supportsFingerprints && /fingerprints/i.test(message)) {
+          runtime.supportsFingerprints = false;
+          continue;
+        }
+        if (supportsExtendedFieldFallback(error)) {
+          runtime.supportsExtendedSceneFields = false;
+          continue;
+        }
+        throw error;
+      }
+    }
+    throw new Error("Unable to complete scene query with compatible fields");
+  }
+
+  async function queryScenesPage(filter, includeFingerprints, includeExtendedFields) {
+    const fragment = sceneFragment(includeFingerprints, includeExtendedFields);
     return gql(`
       query($filter: FindFilterType!) {
         findScenes(filter: $filter) {
@@ -51,17 +86,9 @@
     let total = null;
 
     while (true) {
-      let data;
-      try {
-        data = await queryScenesPage({ per_page: PER_PAGE, page, sort: "title" }, runtime.supportsFingerprints);
-      } catch (error) {
-        if (runtime.supportsFingerprints && /fingerprints/i.test(String(error && error.message))) {
-          runtime.supportsFingerprints = false;
-          data = await queryScenesPage({ per_page: PER_PAGE, page, sort: "title" }, false);
-        } else {
-          throw error;
-        }
-      }
+      const data = await withSceneCompatibility((includeFingerprints, includeExtendedFields) =>
+        queryScenesPage({ per_page: PER_PAGE, page, sort: "title" }, includeFingerprints, includeExtendedFields)
+      );
 
       const { count, scenes } = data.findScenes;
       if (total === null) total = count;
@@ -75,26 +102,14 @@
   }
 
   async function fetchScene(id) {
-    const fragment = sceneFragment(runtime.supportsFingerprints);
-    try {
+    return withSceneCompatibility(async (includeFingerprints, includeExtendedFields) => {
       const d = await gql(`
         query FindScene($id: ID!) {
-          findScene(id: $id) { ${fragment} }
+          findScene(id: $id) { ${sceneFragment(includeFingerprints, includeExtendedFields)} }
         }
       `, { id: String(id) });
       return d.findScene;
-    } catch (error) {
-      if (runtime.supportsFingerprints && /fingerprints/i.test(String(error && error.message))) {
-        runtime.supportsFingerprints = false;
-        const d = await gql(`
-          query FindScene($id: ID!) {
-            findScene(id: $id) { ${sceneFragment(false)} }
-          }
-        `, { id: String(id) });
-        return d.findScene;
-      }
-      throw error;
-    }
+    });
   }
 
   async function canSplitScenes() {
@@ -121,31 +136,17 @@
     fetchScene,
     canSplitScenes,
     async fetchDuplicateSceneGroups(distance) {
-      try {
+      return withSceneCompatibility(async (includeFingerprints, includeExtendedFields) => {
         const d = await gql(`
           query FindDuplicateScenes($distance: Int) {
             findDuplicateScenes(distance: $distance) {
-              ${sceneFragment(runtime.supportsFingerprints)}
+              ${sceneFragment(includeFingerprints, includeExtendedFields)}
             }
           }
         `, { distance: Number(distance) });
         const groups = d.findDuplicateScenes || [];
         return groups.map(group => Array.isArray(group) ? group : [group]);
-      } catch (error) {
-        if (runtime.supportsFingerprints && /fingerprints/i.test(String(error && error.message))) {
-          runtime.supportsFingerprints = false;
-          const d = await gql(`
-            query FindDuplicateScenes($distance: Int) {
-              findDuplicateScenes(distance: $distance) {
-                ${sceneFragment(false)}
-              }
-            }
-          `, { distance: Number(distance) });
-          const groups = d.findDuplicateScenes || [];
-          return groups.map(group => Array.isArray(group) ? group : [group]);
-        }
-        throw error;
-      }
+      });
     },
     async destroyScene(id, deleteFile) {
       return gql(`
@@ -176,29 +177,16 @@
       `, { input: { id: String(sceneId), primary_file_id: String(fileId) } });
     },
     async createScene(input) {
-      try {
+      return withSceneCompatibility(async (includeFingerprints, includeExtendedFields) => {
         const d = await gql(`
           mutation SceneCreate($input: SceneCreateInput!) {
             sceneCreate(input: $input) {
-              ${sceneFragment(runtime.supportsFingerprints)}
+              ${sceneFragment(includeFingerprints, includeExtendedFields)}
             }
           }
         `, { input });
         return d.sceneCreate;
-      } catch (error) {
-        if (runtime.supportsFingerprints && /fingerprints/i.test(String(error && error.message))) {
-          runtime.supportsFingerprints = false;
-          const d = await gql(`
-            mutation SceneCreate($input: SceneCreateInput!) {
-              sceneCreate(input: $input) {
-                ${sceneFragment(false)}
-              }
-            }
-          `, { input });
-          return d.sceneCreate;
-        }
-        throw error;
-      }
+      });
     },
     async assignSceneFile(sceneId, fileId) {
       return gql(`
