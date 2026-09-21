@@ -6,7 +6,7 @@ A [Stash](https://github.com/stashapp/stash) plugin that finds duplicate scenes 
 
 ## Features
 
-- **Duplicate detection modes** — switch between pHash-first matching with a legacy fallback pass for scenes not already grouped, or legacy-only title/date/studio matching
+- **Duplicate detection modes** — switch between pHash-first matching with a legacy fallback pass only for scenes without pHash, or legacy-only title/date/studio matching
 - **Multi-file scene detection** — finds scenes that have more than one file attached
 - **Click-to-keep selection** — click any file row or duplicate-scene row to choose exactly what should be kept
 - **Consistent keep labeling** — the selected keeper is always marked **keep** so the UI reflects your choice
@@ -17,9 +17,8 @@ A [Stash](https://github.com/stashapp/stash) plugin that finds duplicate scenes 
 - **Keep selected file cleanup** — in the Multi-file tab, keep the selected file and delete the rest without deleting the scene
 - **Split multi-file scenes** — unmerge a scene by keeping the selected file on the original scene and moving each other file into its own new scene
 - **Merge duplicates into selected keep** — in the Duplicates tab, merge the rest of the group into the selected keep scene
-- **Dry run / preview mode** — preview cleanup, delete, merge, and batch actions before anything destructive happens
+- **Dry run / preview mode** — preview cleanup, merge, and batch actions before anything destructive happens
 - **Batch progress + abort** — batch runs lock the modal, show progress, and can abort the remaining items without undoing completed actions
-- **Delete scenes** — delete individual scenes (and their files from disk) directly from the results
 - **Floating button** — accessible from anywhere in Stash via a persistent 🔍 Dupes button
 - **No Python required** — pure JavaScript, client-side only
 
@@ -51,34 +50,32 @@ Lists every scene that has more than one file attached, sorted by file count. Cl
 Available actions:
 - **🧹 Keep** — keeps the currently selected file, safely makes it the scene's primary file if needed, and deletes the other files from disk
 - **✂ Split** — keeps the selected file on the current scene and creates new scenes for the remaining files using copied scene metadata
-- **🗑 Delete scene** — deletes the whole scene and all its files
 - In **Batch mode**, exclude any scenes you want to skip, then run **Keep selected in batch** to apply the chosen keep file across all included scenes
 - Scenes whose file durations differ by more than the configured safety threshold start **Excluded** in batch mode and ask for confirmation before being re-added
 - In **Dry run / preview mode**, these actions show what would be kept or deleted without making changes
 
 ### Duplicates tab
-Lists groups of scenes using the selected duplicate finder mode. In **pHash** mode, scenes match by pHash distance first and any scenes not already grouped then go through the legacy title/date/studio matcher. In **Legacy** mode, all duplicate matching uses the legacy matcher. Click any scene row to choose the scene to **keep** before merging.
+Lists groups of scenes using the selected duplicate finder mode. In **pHash** mode, scenes match by pHash distance first and only scenes without pHash then go through the legacy title/date/studio matcher. In **Legacy** mode, all duplicate matching uses the legacy matcher. Click any scene row to choose the scene to **keep** before merging.
 
 Available actions:
 - **⚡ Merge** — merges the rest of the selected duplicate group into the currently selected keep scene, combining metadata
-- **🗑 Delete** — delete any individual scene and its files from disk
 - In **Batch mode**, exclude any groups you want to skip, then run **Merge selected in batch** to process all included groups
 - Unsafe groups (large duration differences) can start excluded in batch mode and require explicit confirmation before inclusion
 - While a batch is running, the modal shows progress, disables other interactions, and lets you abort the remaining items only
-- In **Dry run / preview mode**, merge, delete, and batch actions preview the destination keeper and source scenes instead of executing
+- In **Dry run / preview mode**, merge and batch actions preview the destination keeper and source scenes instead of executing
 
 ---
 
 ## How duplicates are detected
 
 Two scenes are considered duplicates when:
-- In **pHash** mode, their pHashes are within the configured Hamming distance, or they were not already grouped by pHash and the legacy matcher decides they match
+- In **pHash** mode, their pHashes are within the configured Hamming distance, or they have no pHash and the legacy matcher decides they match
 - In **Legacy** mode, the legacy matcher decides they match based on title and/or date+studio
 
 The duplicate settings can be tuned in **⚙**:
 - **Duplicate finder mode** switches between `pHash` and `Legacy`
 - **pHash distance** uses presets: `Exact (0)`, `High (4)`, `Medium (8)`, `Low (10)`
-- **Legacy title distance** controls the Levenshtein fallback used by legacy mode and by the fallback pass in pHash mode
+- **Legacy title distance** controls the Levenshtein fallback used by legacy mode and by the no-pHash fallback pass in pHash mode
 
 Legacy fallback scenes with no title and no date+studio combination are excluded from duplicate detection.
 
