@@ -75,13 +75,22 @@
     }
 
     function getSelectedMultiFile(scene) {
-      const selectedId = state.multiKeepers[helpers.idKey(scene.id)];
-      return (scene.files || []).find(file => helpers.idKey(file.id) === selectedId) || analysis.pickBestFile(scene.files, state.settings);
+      const sceneKey = helpers.idKey(scene.id);
+      if (Object.prototype.hasOwnProperty.call(state.multiKeepers, sceneKey)) {
+        const selectedId = state.multiKeepers[sceneKey];
+        if (selectedId === null) return null;
+        return (scene.files || []).find(file => helpers.idKey(file.id) === selectedId) || null;
+      }
+      return analysis.pickBestFile(scene.files, state.settings);
     }
 
     function getSelectedDuplicateScene(group) {
-      const selectedId = state.duplicateKeepers[group.key];
-      return group.scenes.find(scene => helpers.idKey(scene.id) === selectedId) || analysis.bestScene(group.scenes, state.settings);
+      if (Object.prototype.hasOwnProperty.call(state.duplicateKeepers, group.key)) {
+        const selectedId = state.duplicateKeepers[group.key];
+        if (selectedId === null) return null;
+        return group.scenes.find(scene => helpers.idKey(scene.id) === selectedId) || null;
+      }
+      return analysis.bestScene(group.scenes, state.settings);
     }
 
     function isSceneBatchIncluded(scene) {
@@ -121,7 +130,9 @@
         }
 
         const fallbackScenes = state.allScenes.filter(scene => !analysis.sceneHasPhash(scene, state.settings));
-        const legacyGroups = analysis.findLegacyDuplicateScenes(fallbackScenes, state.settings);
+        const legacyGroups = state.settings.useLegacyWhenNoPhash
+          ? analysis.findLegacyDuplicateScenes(fallbackScenes, state.settings)
+          : [];
         state.dupGroups = analysis.sortDuplicateGroups(phashGroups.concat(legacyGroups));
       }
       state.duplicateGroupsDirty = false;
@@ -188,34 +199,11 @@
       refreshDuplicateSelections();
     }
 
-    function buildSplitSceneInput(scene) {
-      const input = {
-        organized: !!scene.organized,
+    function buildSplitSceneInput(file) {
+      return {
+        organized: false,
+        title: helpers.fileName(file),
       };
-      if (scene.title) input.title = scene.title;
-      if (scene.code) input.code = scene.code;
-      if (scene.details) input.details = scene.details;
-      if (scene.director) input.director = scene.director;
-      if (scene.date) input.date = scene.date;
-      if (scene.production_date) input.production_date = scene.production_date;
-      if (Array.isArray(scene.urls) && scene.urls.length) input.urls = scene.urls.filter(Boolean);
-      const rating100 = helpers.toFiniteNumber(scene.rating100);
-      if (rating100 !== null) input.rating100 = rating100;
-      if (scene.studio && scene.studio.id) input.studio_id = String(scene.studio.id);
-      if ((scene.galleries || []).length) input.gallery_ids = scene.galleries.map(gallery => String(gallery.id));
-      if ((scene.performers || []).length) input.performer_ids = scene.performers.map(performer => String(performer.id));
-      if ((scene.tags || []).length) input.tag_ids = scene.tags.map(tag => String(tag.id));
-      if ((scene.groups || []).length) {
-        input.groups = scene.groups
-          .filter(item => item && item.group && item.group.id)
-          .map(item => {
-            const groupInput = { group_id: String(item.group.id) };
-            const sceneIndex = helpers.toFiniteNumber(item.scene_index);
-            if (sceneIndex !== null) groupInput.scene_index = sceneIndex;
-            return groupInput;
-          });
-      }
-      return input;
     }
 
     function refreshSplitSceneState(updatedScene, createdScenes) {
@@ -259,7 +247,7 @@
         let createdSceneId = null;
         let assigned = false;
         try {
-          const created = await api.createScene(buildSplitSceneInput(scene));
+          const created = await api.createScene(buildSplitSceneInput(file));
           if (!created) throw new Error("Scene creation returned no scene");
           createdSceneId = created.id;
           await api.assignSceneFile(created.id, file.id);
@@ -289,7 +277,9 @@
 
     async function runKeepScene(scene, withBusyOperation, updateBusyOperation, showTab) {
       const keeper = getSelectedMultiFile(scene);
-      const extraFiles = (scene.files || []).filter(file => helpers.idKey(file.id) !== helpers.idKey(keeper.id));
+      const extraFiles = keeper
+        ? (scene.files || []).filter(file => helpers.idKey(file.id) !== helpers.idKey(keeper.id))
+        : [];
       if (!keeper || !extraFiles.length) {
         ui.toast(`Scene #${scene.id} already only has the selected keep file`, "#56b6c2");
         return;
@@ -329,7 +319,9 @@
 
     async function runSplitScene(scene, withBusyOperation, updateBusyOperation, showTab) {
       const keeper = getSelectedMultiFile(scene);
-      const extraFiles = (scene.files || []).filter(file => helpers.idKey(file.id) !== helpers.idKey(keeper.id));
+      const extraFiles = keeper
+        ? (scene.files || []).filter(file => helpers.idKey(file.id) !== helpers.idKey(keeper.id))
+        : [];
       if (!keeper || !extraFiles.length) {
         ui.toast(`Scene #${scene.id} already only has the selected keep file`, "#56b6c2");
         return;
@@ -353,7 +345,7 @@
       if (!confirm(
         `Split "${helpers.sceneName(scene)}" into ${extraFiles.length + 1} scene(s)?\n\n` +
         `The current scene will keep:\n- ${helpers.fileName(keeper)}\n\n` +
-        `Each other file will become its own new scene with copied metadata:\n${extraFiles.map(file => `- ${helpers.fileName(file)}`).join("\n")}`
+        `Each other file will become its own new scene with title set to the file name, no copied metadata, and organized disabled:\n${extraFiles.map(file => `- ${helpers.fileName(file)}`).join("\n")}`
       )) return;
 
       try {
@@ -374,7 +366,9 @@
 
     async function runMergeGroup(group, withBusyOperation, updateBusyOperation, showTab) {
       const keeper = getSelectedDuplicateScene(group);
-      const sources = group.scenes.filter(scene => helpers.idKey(scene.id) !== helpers.idKey(keeper.id));
+      const sources = keeper
+        ? group.scenes.filter(scene => helpers.idKey(scene.id) !== helpers.idKey(keeper.id))
+        : [];
       const keepTitle = helpers.sceneName(keeper);
       if (!sources.length) {
         ui.toast(`Nothing left to merge for ${keepTitle}`, "#56b6c2");

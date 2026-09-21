@@ -18,6 +18,7 @@
   root.defaults = {
     settings: {
       duplicateFinderMode: "phash",
+      useLegacyWhenNoPhash: false,
       phashDistanceMode: "exact",
       phashDistance: 0,
       legacyDistance: 0,
@@ -44,7 +45,7 @@
     },
     columns: {
       multi: [
-        { key: "actions", label: "Actions", width: "220px" },
+        { key: "actions", label: "", width: "220px" },
         { key: "path", label: "Path", width: "38%" },
         { key: "res", label: "Res", width: "75px" },
         { key: "codec", label: "Codec", width: "100px" },
@@ -53,7 +54,7 @@
         { key: "size", label: "Size", width: "95px" },
       ],
       dupes: [
-        { key: "actions", label: "Actions", width: "220px" },
+        { key: "actions", label: "", width: "220px" },
         { key: "scene", label: "Scene", width: "130px" },
         { key: "files", label: "Files", width: "22%" },
         { key: "res", label: "Res", width: "70px" },
@@ -172,6 +173,9 @@
       const duplicateFinderMode = ["phash", "legacy"].includes(candidate.duplicateFinderMode)
         ? candidate.duplicateFinderMode
         : defaults.duplicateFinderMode;
+      const useLegacyWhenNoPhash = candidate.useLegacyWhenNoPhash !== undefined
+        ? !!candidate.useLegacyWhenNoPhash
+        : defaults.useLegacyWhenNoPhash;
       const phashDistanceMode = root.constants.PHASH_DISTANCE_PRESETS.some(preset => preset.value === candidate.phashDistanceMode)
         ? candidate.phashDistanceMode
         : this.phashPresetForDistance(candidate.phashDistance);
@@ -182,6 +186,7 @@
       const bestAlgorithm = ["balanced", "quality", "size"].includes(algo) ? algo : defaults.bestAlgorithm;
       return {
         duplicateFinderMode,
+        useLegacyWhenNoPhash,
         phashDistanceMode,
         phashDistance: Number.isFinite(phashDistance) ? Math.max(0, Math.min(64, Math.round(phashDistance))) : defaults.phashDistance,
         legacyDistance: Number.isFinite(legacyDistance) ? Math.max(0, Math.min(10, Math.round(legacyDistance))) : defaults.legacyDistance,
