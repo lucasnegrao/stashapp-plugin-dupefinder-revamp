@@ -4,7 +4,8 @@
 
   root.constants = {
     MODAL_ID: "df-modal",
-    BTN_ID: "df-button",
+    PLUGIN_ID: "DupeFinder",
+    SHOW_HEADER_BUTTON_SETTING: "showHeaderButton",
     SETTINGS_KEY: "df-settings-v2",
     CODEC_RANK: ["av1", "hevc", "h265", "vp9", "h264", "avc", "mpeg4", "mpeg2"],
     PHASH_DISTANCE_PRESETS: [

@@ -30,7 +30,6 @@
         abortRequested: false,
         warning: "",
       },
-      observer: null,
       scheduled: false,
       duplicateGroupsDirty: true,
     };
@@ -937,40 +936,85 @@
       });
     }
 
-    function injectButton() {
-      if (document.getElementById(constants.BTN_ID)) return;
-      const btn = document.createElement("button");
-      btn.id = constants.BTN_ID;
-      btn.textContent = "🔍 Dupes";
-      btn.style.cssText = [
-        "position:fixed;bottom:80px;left:24px;z-index:9990;",
-        "background:#c678dd;color:#fff;border:none;border-radius:20px;",
-        "padding:9px 16px;font-size:0.85em;font-weight:600;cursor:pointer;",
-        "box-shadow:0 2px 8px rgba(0,0,0,0.4);",
-      ].join("");
-      btn.addEventListener("click", openModal);
-      btn.addEventListener("mouseenter", () => { btn.style.background = "#d896e8"; });
-      btn.addEventListener("mouseleave", () => { btn.style.background = "#c678dd"; });
-      document.body.appendChild(btn);
+    function reactTreeContainsRoute(React, node, route) {
+      if (!React.isValidElement(node)) return false;
+      if (node.props && (node.props.to === route || node.props.href === route)) return true;
+      return [node.props && node.props.children, node.props && node.props.heading]
+        .some(value => React.Children.toArray(value).some(child => reactTreeContainsRoute(React, child, route)));
+    }
+
+    function installStashLaunchers() {
+      const pluginApi = window.PluginApi;
+      if (!pluginApi || !pluginApi.patch || !pluginApi.React) {
+        console.error("[DupeFinder] Stash PluginApi is unavailable; launchers were not installed");
+        return;
+      }
+
+      const React = pluginApi.React;
+      const { Button } = pluginApi.libraries.Bootstrap;
+      const { FontAwesomeIcon } = pluginApi.libraries.ReactFontAwesome;
+      const { faSearch } = pluginApi.libraries.FontAwesomeSolid;
+      let defaultInitializationStarted = false;
+
+      function HeaderLauncher() {
+        const { data } = pluginApi.GQL.useConfigurationQuery();
+        const [configurePlugin] = pluginApi.utils.StashService.useConfigurePlugin();
+        const plugins = (data && data.configuration && data.configuration.plugins) || {};
+        const pluginSettings = plugins[constants.PLUGIN_ID] || {};
+
+        React.useEffect(() => {
+          if (!data || defaultInitializationStarted ||
+              Object.prototype.hasOwnProperty.call(pluginSettings, constants.SHOW_HEADER_BUTTON_SETTING)) return;
+          defaultInitializationStarted = true;
+          configurePlugin({
+            variables: {
+              plugin_id: constants.PLUGIN_ID,
+              input: {
+                ...pluginSettings,
+                [constants.SHOW_HEADER_BUTTON_SETTING]: true,
+              },
+            },
+          }).catch(error => {
+            defaultInitializationStarted = false;
+            console.warn("[DupeFinder] Could not initialize plugin settings", error);
+          });
+        }, [data, configurePlugin, pluginSettings]);
+
+        if (pluginSettings[constants.SHOW_HEADER_BUTTON_SETTING] === false) return null;
+
+        return React.createElement(Button, {
+          className: "nav-utility minimal",
+          "data-plugin": "dupefinder",
+          onClick: openModal,
+          title: "Open DupeFinder",
+          "aria-label": "Open DupeFinder",
+        }, React.createElement(FontAwesomeIcon, { icon: faSearch, className: "fa-icon" }));
+      }
+
+      pluginApi.patch.before("MainNavBar.UtilityItems", props => [{
+        ...props,
+        children: React.createElement(React.Fragment, null, props.children, React.createElement(HeaderLauncher)),
+      }]);
+
+      pluginApi.patch.before("SettingsToolsSection", props => {
+        if (!reactTreeContainsRoute(React, props.children, "/sceneDuplicateChecker")) return [props];
+        const { Setting } = pluginApi.components;
+        const launcher = React.createElement(Setting, {
+          key: "dupefinder-tools-launcher",
+          heading: React.createElement(Button, { onClick: openModal }, "🔍 DupeFinder"),
+          subHeading: "Find and manage duplicate and multi-file scenes.",
+        });
+        return [{
+          ...props,
+          children: React.createElement(React.Fragment, null, props.children, launcher),
+        }];
+      });
     }
 
     function schedule() {
       if (state.scheduled) return;
       state.scheduled = true;
-
-      const startObserver = () => {
-        if (!document.body || state.observer) return;
-        state.observer = new MutationObserver(() => {
-          if (!document.getElementById(constants.BTN_ID)) injectButton();
-        });
-        state.observer.observe(document.body, { childList: true, subtree: true });
-      };
-
-      if (document.readyState === "complete" || document.readyState === "interactive") injectButton();
-      else document.addEventListener("DOMContentLoaded", injectButton, { once: true });
-
-      if (document.body) startObserver();
-      else document.addEventListener("DOMContentLoaded", startObserver, { once: true });
+      installStashLaunchers();
     }
 
     return { schedule };

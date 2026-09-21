@@ -3,6 +3,12 @@ description: Find duplicate scenes (same title/date/studio) and multi-file scene
 version: "1.0"
 url: ""
 
+settings:
+  showHeaderButton:
+    displayName: Show DupeFinder in header
+    description: Show an icon-only DupeFinder button in the Stash header. DupeFinder remains available under Settings → Tools when disabled.
+    type: BOOLEAN
+
 ui:
   javascript:
     - DupeFinder.shared.js

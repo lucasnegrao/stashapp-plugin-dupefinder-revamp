@@ -1,6 +1,6 @@
 # DupeFinder
 
-A [Stash](https://github.com/stashapp/stash) plugin that finds duplicate scenes and multi-file scenes in your library, and lets you merge or delete them directly from a floating modal — no page navigation required.
+A [Stash](https://github.com/stashapp/stash) plugin that finds duplicate scenes and multi-file scenes in your library, and lets you merge or delete them directly from a modal.
 
 ---
 
@@ -20,7 +20,7 @@ A [Stash](https://github.com/stashapp/stash) plugin that finds duplicate scenes 
 - **Merge duplicates into selected keep** — in the Duplicates tab, combine metadata into the selected keep scene and delete every non-keeper scene and its files
 - **Dry run / preview mode** — preview cleanup, merge, and batch actions before anything destructive happens
 - **Batch progress + abort** — batch runs lock the modal, show progress, and can abort the remaining items without undoing completed actions
-- **Floating button** — accessible from anywhere in Stash via a persistent 🔍 Dupes button
+- **Native Stash launchers** — always available under **Settings → Tools**, with an optional icon-only header button enabled by default
 - **No Python required** — pure JavaScript, client-side only
 
 ---
@@ -32,13 +32,14 @@ A [Stash](https://github.com/stashapp/stash) plugin that finds duplicate scenes 
    C:\Users\<you>\.stash\plugins\DupeFinder\
    ```
 2. In Stash, go to **Settings → Plugins** and click **Reload Plugins**
-3. A **🔍 Dupes** button will appear in the bottom-left of every Stash page
+3. Open **Settings → Tools → DupeFinder**; an icon-only DupeFinder button also appears in the Stash header by default
+4. To hide the header icon, disable **Show DupeFinder in header** in **Settings → Plugins → DupeFinder**. The Tools entry remains available.
 
 ---
 
 ## Usage
 
-1. Click **🔍 Dupes** anywhere in Stash
+1. Open **DupeFinder** from **Settings → Tools**, or click its search icon in the Stash header
 2. The plugin loads all scenes from your library (progress shown while loading)
 3. Optional: enable **Dry run / preview mode** in the modal header to preview destructive actions before executing them
 4. Optional: enable **Batch mode** to work through many scenes/groups at once while excluding anything you want to skip
@@ -97,4 +98,4 @@ Legacy fallback scenes with no title and no date+studio combination are excluded
 - Loading time scales with library size — large libraries (10,000+ scenes) may take a few seconds
 - Keep, merge, delete, and batch actions are permanent and cannot be undone from within the plugin unless you first use **Dry run / preview mode** to inspect them
 - Aborting a batch only stops the remaining items; anything already kept, merged, or deleted stays changed
-- The floating button persists across page navigation via a MutationObserver
+- The Tools launcher is always available; only the header icon is controlled by the plugin setting
