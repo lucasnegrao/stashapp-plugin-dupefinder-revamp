@@ -98,8 +98,30 @@
     docsLink.rel = "noopener noreferrer";
     docsLink.textContent = "Open full documentation ↗";
     docsLink.style.cssText = "background:#61afef;border-radius:4px;color:#21252b;padding:7px 12px;font-size:0.82em;font-weight:600;text-decoration:none;";
+    const blockedWarning = ui.el("div", "display:none;margin-top:12px;padding:10px;background:#21252b;border:1px solid #e5c07b;border-radius:5px;color:#e5c07b;font-size:0.8em;line-height:1.45;", "Your browser blocked the documentation tab. Allow pop-ups for this Stash site, or copy this URL:");
+    const urlInput = document.createElement("input");
+    urlInput.type = "text";
+    urlInput.readOnly = true;
+    urlInput.value = constants.README_URL;
+    urlInput.setAttribute("aria-label", "Documentation URL");
+    urlInput.style.cssText = "box-sizing:border-box;width:100%;margin-top:7px;background:#181a1f;border:1px solid #3e4451;border-radius:4px;color:#abb2bf;padding:6px;font-size:0.95em;";
+    urlInput.addEventListener("click", () => urlInput.select());
+    blockedWarning.appendChild(urlInput);
+    docsLink.addEventListener("click", event => {
+      event.preventDefault();
+      event.stopPropagation();
+      const documentationWindow = window.open("", "_blank");
+      if (documentationWindow) {
+        documentationWindow.opener = null;
+        documentationWindow.location.href = constants.README_URL;
+      } else {
+        blockedWarning.style.display = "block";
+        urlInput.focus();
+        urlInput.select();
+      }
+    });
     actions.appendChild(docsLink);
-    panel.appendChild(actions);
+    panel.append(actions, blockedWarning);
 
     overlay.appendChild(panel);
     overlay.addEventListener("click", event => { if (event.target === overlay) onClose(); });
