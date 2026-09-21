@@ -11,9 +11,11 @@ A [Stash](https://github.com/stashapp/stash) plugin that finds duplicate scenes 
 - **Click-to-keep selection** — click any file row or duplicate-scene row to choose exactly what should be kept
 - **Consistent keep labeling** — the selected keeper is always marked **keep** so the UI reflects your choice
 - **Batch mode for both tabs** — exclude any scene/group from the batch, then apply keep or merge to everything still included
+- **Safer batch keep defaults** — multi-file scenes with file durations differing by more than 10 seconds start excluded from batch keep until you explicitly confirm them
 - **Keep selected file cleanup** — in the Multi-file tab, keep the selected file and delete the rest without deleting the scene
 - **Merge duplicates into selected keep** — in the Duplicates tab, merge the rest of the group into the selected keep scene
 - **Dry run / preview mode** — preview cleanup, delete, merge, and batch actions before anything destructive happens
+- **Batch progress + abort** — batch runs lock the modal, show progress, and can abort the remaining items without undoing completed actions
 - **Delete scenes** — delete individual scenes (and their files from disk) directly from the results
 - **Floating button** — accessible from anywhere in Stash via a persistent 🔍 Dupes button
 - **No Python required** — pure JavaScript, client-side only
@@ -46,6 +48,7 @@ Available actions:
 - **🧹 Keep** — keeps the currently selected file, safely makes it the scene's primary file if needed, and deletes the other files from disk
 - **🗑 Delete scene** — deletes the whole scene and all its files
 - In **Batch mode**, exclude any scenes you want to skip, then run **Keep selected in batch** to apply the chosen keep file across all included scenes
+- Scenes whose file durations differ by more than 10 seconds start **Excluded** in batch mode and ask for confirmation before being re-added
 - In **Dry run / preview mode**, these actions show what would be kept or deleted without making changes
 
 ### Duplicates tab
@@ -55,6 +58,7 @@ Available actions:
 - **⚡ Merge** — merges the rest of the selected duplicate group into the currently selected keep scene, combining metadata
 - **🗑 Delete** — delete any individual scene and its files from disk
 - In **Batch mode**, exclude any groups you want to skip, then run **Merge selected in batch** to process all included groups
+- While a batch is running, the modal shows progress, disables other interactions, and lets you abort the remaining items only
 - In **Dry run / preview mode**, merge, delete, and batch actions preview the destination keeper and source scenes instead of executing
 
 ---
@@ -80,4 +84,5 @@ Scenes with no title and no date+studio combination are excluded from duplicate 
 
 - Loading time scales with library size — large libraries (10,000+ scenes) may take a few seconds
 - Keep, merge, delete, and batch actions are permanent and cannot be undone from within the plugin unless you first use **Dry run / preview mode** to inspect them
+- Aborting a batch only stops the remaining items; anything already kept, merged, or deleted stays changed
 - The floating button persists across page navigation via a MutationObserver

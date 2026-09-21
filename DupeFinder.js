@@ -1,7 +1,7 @@
-// v1.2 - DupeFinder - manual keep selection + batch mode
+// v1.3 - DupeFinder - safer batch mode + progress overlay
 (function () {
   "use strict";
-  console.log("[DupeFinder] Script loaded v1.2");
+  console.log("[DupeFinder] Script loaded v1.3");
 
   const MODAL_ID = "df-modal";
   const BTN_ID   = "df-button";
@@ -86,6 +86,10 @@
   function idKey(id) { return String(id); }
   function norm(str) { return (str || "").trim().toLowerCase(); }
   function normDate(str) { return (str || "").trim(); }
+  function toFiniteNumber(value) {
+    const number = Number(value);
+    return Number.isFinite(number) ? number : null;
+  }
 
   function previewAction(title, lines) {
     alert(`DRY RUN / PREVIEW — ${title}\n\n${lines.join("\n")}`);
@@ -182,6 +186,7 @@
   }
 
   const CODEC_RANK = ["av1", "hevc", "h265", "vp9", "h264", "avc", "mpeg4", "mpeg2"];
+  const MAX_BATCH_DURATION_DIFF_SECONDS = 10;
   function codecScore(sceneOrFile) {
     const file = sceneOrFile && sceneOrFile.video_codec !== undefined
       ? sceneOrFile
@@ -203,6 +208,22 @@
     return [...(files || [])].sort(compareFiles)[0];
   }
 
+  function sceneFileDurations(scene) {
+    return (scene.files || [])
+      .map(file => toFiniteNumber(file && file.duration))
+      .filter(duration => duration !== null);
+  }
+
+  function sceneDurationDiffSeconds(scene) {
+    const durations = sceneFileDurations(scene);
+    if (durations.length < 2) return 0;
+    return Math.max(...durations) - Math.min(...durations);
+  }
+
+  function hasLargeDurationMismatch(scene) {
+    return sceneDurationDiffSeconds(scene) > MAX_BATCH_DURATION_DIFF_SECONDS;
+  }
+
   function bestScene(groupScenes) {
     return [...groupScenes].sort((a, b) => {
       const aRes = Math.max(...(a.files || []).map(f => f.height || 0));
@@ -219,7 +240,7 @@
 
   const STYLE = {
     overlay:   "position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9998;display:flex;align-items:center;justify-content:center;",
-    modal:     "background:#21252b;border:1px solid #3e4451;border-radius:8px;width:92vw;max-width:1100px;height:88vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 8px 32px rgba(0,0,0,0.6);z-index:9999;",
+    modal:     "position:relative;background:#21252b;border:1px solid #3e4451;border-radius:8px;width:92vw;max-width:1100px;height:88vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 8px 32px rgba(0,0,0,0.6);z-index:9999;",
     header:    "display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid #3e4451;flex-shrink:0;gap:12px;",
     tabs:      "display:flex;gap:4px;padding:10px 18px 0;border-bottom:1px solid #3e4451;flex-shrink:0;",
     body:      "flex:1;overflow-y:auto;padding:14px 18px;",
@@ -266,14 +287,12 @@
     for (const scene of scenes) {
       const sceneWrap = document.createElement("div");
       const selectedFile = getSelectedFile(scene);
-      const sorted = [...scene.files].sort((a, b) => {
-        if (selectedFile && idKey(a.id) === idKey(selectedFile.id)) return -1;
-        if (selectedFile && idKey(b.id) === idKey(selectedFile.id)) return 1;
-        return compareFiles(a, b);
-      });
+      const sorted = [...scene.files].sort(compareFiles);
       const keeper = selectedFile || sorted[0];
       const extraFiles = sorted.filter(f => idKey(f.id) !== idKey(keeper.id));
       const included = isSceneIncluded(scene);
+      const hasDurationMismatch = hasLargeDurationMismatch(scene);
+      const durationDiffSeconds = Math.round(sceneDurationDiffSeconds(scene));
 
       const hdr = el("div", STYLE.groupHdr);
       const link = document.createElement("a");
@@ -284,6 +303,10 @@
       link.addEventListener("click", stopRowSelection);
       hdr.appendChild(link);
       hdr.appendChild(el("span", STYLE.badge + "background:#e06c75;color:#fff;", `${scene.files.length} files`));
+      if (hasDurationMismatch) {
+        hdr.appendChild(el("span", STYLE.badge + "background:#e5c07b;color:#21252b;",
+          `Duration diff ${durationDiffSeconds}s`));
+      }
       if (batchMode) {
         hdr.appendChild(el("span", STYLE.badge + `${included ? "background:#98c379;color:#21252b;" : "background:#5c6370;color:#fff;"}`,
           included ? "In batch" : "Excluded"));
@@ -298,34 +321,36 @@
         }));
       }
 
-      if (keeper && extraFiles.length) {
+      if (!batchMode && keeper && extraFiles.length) {
         hdr.appendChild(mkBtn(dryRun ? "👁 Preview keep" : "🧹 Keep", "#98c379", async () => {
           await onKeepScene(scene);
         }));
       }
 
-      const delBtn = mkBtn(dryRun ? "👁 Preview delete scene" : "🗑 Delete scene", "#e06c75", async () => {
-        if (dryRun) {
-          previewAction(`Delete scene ${sceneName(scene)}`, [
-            `Would delete scene #${scene.id} and ${scene.files.length} file(s) from disk:`,
-            ...scene.files.map(f => `- ${fileName(f)}`),
-          ]);
-          return;
-        }
-        if (!confirm(`Delete scene "${sceneName(scene)}" and ALL its files from disk?`)) return;
-        delBtn.textContent = "Deleting…";
-        delBtn.disabled = true;
-        try {
-          await destroyScene(scene.id, true);
-          onSceneDeleted(scene.id);
-          toast(`Deleted scene #${scene.id}`, "#e06c75");
-        } catch (e) {
-          toast(`Error: ${e.message}`, "#e06c75");
-          delBtn.textContent = dryRun ? "👁 Preview delete scene" : "🗑 Delete scene";
-          delBtn.disabled = false;
-        }
-      });
-      hdr.appendChild(delBtn);
+      if (!batchMode) {
+        const delBtn = mkBtn(dryRun ? "👁 Preview delete scene" : "🗑 Delete scene", "#e06c75", async () => {
+          if (dryRun) {
+            previewAction(`Delete scene ${sceneName(scene)}`, [
+              `Would delete scene #${scene.id} and ${scene.files.length} file(s) from disk:`,
+              ...scene.files.map(f => `- ${fileName(f)}`),
+            ]);
+            return;
+          }
+          if (!confirm(`Delete scene "${sceneName(scene)}" and ALL its files from disk?`)) return;
+          delBtn.textContent = "Deleting…";
+          delBtn.disabled = true;
+          try {
+            await destroyScene(scene.id, true);
+            onSceneDeleted(scene.id);
+            toast(`Deleted scene #${scene.id}`, "#e06c75");
+          } catch (e) {
+            toast(`Error: ${e.message}`, "#e06c75");
+            delBtn.textContent = dryRun ? "👁 Preview delete scene" : "🗑 Delete scene";
+            delBtn.disabled = false;
+          }
+        });
+        hdr.appendChild(delBtn);
+      }
       sceneWrap.appendChild(hdr);
 
       const table = el("table", STYLE.table);
@@ -420,9 +445,11 @@
         }));
       }
 
-      hdr.appendChild(mkBtn(dryRun ? "👁 Preview merge" : "⚡ Merge", "#61afef", async () => {
-        await onMergeGroup(group);
-      }));
+      if (!batchMode) {
+        hdr.appendChild(mkBtn(dryRun ? "👁 Preview merge" : "⚡ Merge", "#61afef", async () => {
+          await onMergeGroup(group);
+        }));
+      }
       groupWrap.appendChild(hdr);
 
       const table = el("table", STYLE.table);
@@ -433,9 +460,9 @@
         <th style="${STYLE.th}">Codec</th>
         <th style="${STYLE.th}">Size</th>
         <th style="${STYLE.th}">Organized</th>
-        <th style="${STYLE.th}">Performers</th>
-        <th style="${STYLE.th}"></th>
-      </tr></thead>`;
+        <th style="${STYLE.th}">Performers</th>` +
+        (!batchMode ? `<th style="${STYLE.th}"></th>` : "") +
+      `</tr></thead>`;
       const tbody = document.createElement("tbody");
 
       for (const scene of group.scenes) {
@@ -469,31 +496,35 @@
         const tdOrg = el("td", STYLE.td + "text-align:center;color:#98c379;", scene.organized ? "✓" : "");
         const tdPerf = el("td", STYLE.td + "color:#abb2bf;", perfs);
 
-        const tdAct = el("td", STYLE.td);
-        const delBtn = mkBtn(dryRun ? "👁 Preview delete" : "🗑 Delete", "#e06c75", async () => {
-          if (dryRun) {
-            previewAction(`Delete duplicate scene #${scene.id}`, [
-              `Would delete scene #${scene.id} "${scene.title || ""}" and ${scene.files.length} file(s) from disk:`,
-              ...scene.files.map(f => `- ${fileName(f)}`),
-            ]);
-            return;
-          }
-          if (!confirm(`Delete scene #${scene.id} "${scene.title || ""}" and its file(s) from disk?`)) return;
-          delBtn.textContent = "Deleting…";
-          delBtn.disabled = true;
-          try {
-            await destroyScene(scene.id, true);
-            onSceneDeleted(scene.id);
-            toast(`Deleted scene #${scene.id}`, "#e06c75");
-          } catch (e) {
-            toast(`Error: ${e.message}`, "#e06c75");
-            delBtn.textContent = dryRun ? "👁 Preview delete" : "🗑 Delete";
-            delBtn.disabled = false;
-          }
-        });
-        tdAct.appendChild(delBtn);
+        const cells = [tdId, tdFiles, tdRes, tdCodec, tdSize, tdOrg, tdPerf];
+        if (!batchMode) {
+          const tdAct = el("td", STYLE.td);
+          const delBtn = mkBtn(dryRun ? "👁 Preview delete" : "🗑 Delete", "#e06c75", async () => {
+            if (dryRun) {
+              previewAction(`Delete duplicate scene #${scene.id}`, [
+                `Would delete scene #${scene.id} "${scene.title || ""}" and ${scene.files.length} file(s) from disk:`,
+                ...scene.files.map(f => `- ${fileName(f)}`),
+              ]);
+              return;
+            }
+            if (!confirm(`Delete scene #${scene.id} "${scene.title || ""}" and its file(s) from disk?`)) return;
+            delBtn.textContent = "Deleting…";
+            delBtn.disabled = true;
+            try {
+              await destroyScene(scene.id, true);
+              onSceneDeleted(scene.id);
+              toast(`Deleted scene #${scene.id}`, "#e06c75");
+            } catch (e) {
+              toast(`Error: ${e.message}`, "#e06c75");
+              delBtn.textContent = dryRun ? "👁 Preview delete" : "🗑 Delete";
+              delBtn.disabled = false;
+            }
+          });
+          tdAct.appendChild(delBtn);
+          cells.push(tdAct);
+        }
 
-        tr.append(tdId, tdFiles, tdRes, tdCodec, tdSize, tdOrg, tdPerf, tdAct);
+        tr.append(...cells);
         tbody.appendChild(tr);
       }
 
@@ -544,10 +575,105 @@
     let multiKeepers = {};
     let duplicateKeepers = {};
     let multiBatchExcluded = new Set();
+    let multiBatchForcedIncluded = new Set();
     let dupBatchExcluded = new Set();
+    const operationState = {
+      active: false,
+      label: "",
+      detail: "",
+      completed: 0,
+      total: 0,
+      abortable: false,
+      abortRequested: false,
+      warning: "",
+    };
+
+    const busyOverlay = el("div",
+      "position:absolute;inset:0;display:none;align-items:center;justify-content:center;" +
+      "background:rgba(33,37,43,0.82);z-index:4;padding:20px;");
+    const busyPanel = el("div",
+      "background:#2c313a;border:1px solid #3e4451;border-radius:8px;padding:18px 20px;" +
+      "min-width:320px;max-width:520px;box-shadow:0 8px 32px rgba(0,0,0,0.45);");
+    const busyTitleEl = el("div", "color:#e5c07b;font-weight:700;font-size:1em;");
+    const busyProgressEl = el("div", "color:#abb2bf;font-size:0.88em;margin-top:8px;");
+    const busyWarningEl = el("div", "color:#e5c07b;font-size:0.8em;margin-top:10px;line-height:1.4;");
+    busyOverlay.setAttribute("role", "dialog");
+    busyOverlay.setAttribute("aria-modal", "true");
+    busyOverlay.setAttribute("aria-labelledby", "df-busy-title");
+    busyOverlay.setAttribute("aria-describedby", "df-busy-progress df-busy-warning");
+    busyTitleEl.id = "df-busy-title";
+    busyProgressEl.id = "df-busy-progress";
+    busyProgressEl.setAttribute("aria-live", "polite");
+    busyWarningEl.id = "df-busy-warning";
+    busyWarningEl.setAttribute("aria-live", "assertive");
+    const busyAbortBtn = mkBtn("Abort remaining items", "#e5c07b", () => {
+      if (!operationState.abortable || operationState.abortRequested) return;
+      if (!confirm(
+        "Abort the remaining batch items after the current item finishes?\n\n" +
+        "Already completed keep or merge actions will NOT be undone."
+      )) return;
+      operationState.abortRequested = true;
+      renderBusyState();
+    });
+    busyAbortBtn.style.marginTop = "14px";
+    busyAbortBtn.style.color = "#21252b";
+    busyPanel.append(busyTitleEl, busyProgressEl, busyWarningEl, busyAbortBtn);
+    busyOverlay.appendChild(busyPanel);
+    modal.appendChild(busyOverlay);
 
     function updateTitle() {
       titleEl.textContent = batchMode ? `🔍 DupeFinder — ${currentTab === "multi" ? "Multi-file" : "Duplicates"} batch mode` : "🔍 DupeFinder";
+    }
+
+    function renderBusyState() {
+      busyOverlay.style.display = operationState.active ? "flex" : "none";
+      if (!operationState.active) return;
+      busyTitleEl.textContent = operationState.label || "Working…";
+      const progressText = operationState.total
+        ? `${Math.min(operationState.completed, operationState.total)} / ${operationState.total} completed`
+        : "Please wait…";
+      busyProgressEl.textContent = operationState.detail ? `${progressText} — ${operationState.detail}` : progressText;
+      const warningText = operationState.abortRequested
+        ? `Abort requested. The current item will finish first, then the batch will stop. ${operationState.warning || ""}`.trim()
+        : (operationState.warning || "");
+      busyWarningEl.textContent = warningText;
+      busyWarningEl.style.display = warningText ? "block" : "none";
+      busyAbortBtn.style.display = operationState.abortable ? "inline-block" : "none";
+      busyAbortBtn.disabled = operationState.abortRequested;
+      busyAbortBtn.textContent = operationState.abortRequested ? "Abort requested…" : "Abort remaining items";
+    }
+
+    function startBusyOperation(config = {}) {
+      operationState.active = true;
+      operationState.label = config.label || "Working…";
+      operationState.detail = config.detail || "";
+      operationState.completed = config.completed || 0;
+      operationState.total = config.total || 0;
+      operationState.abortable = !!config.abortable;
+      operationState.abortRequested = false;
+      operationState.warning = config.warning || "";
+      renderBusyState();
+    }
+
+    function updateBusyOperation(next = {}) {
+      Object.assign(operationState, next);
+      renderBusyState();
+    }
+
+    function finishBusyOperation() {
+      operationState.active = false;
+      operationState.abortable = false;
+      operationState.abortRequested = false;
+      renderBusyState();
+    }
+
+    async function withBusyOperation(config, fn) {
+      startBusyOperation(config);
+      try {
+        return await fn();
+      } finally {
+        finishBusyOperation();
+      }
     }
 
     function getSelectedMultiFile(scene) {
@@ -560,8 +686,11 @@
       return group.scenes.find(scene => idKey(scene.id) === selectedId) || bestScene(group.scenes);
     }
 
-    function isSceneIncluded(scene) {
-      return !multiBatchExcluded.has(idKey(scene.id));
+    function isSceneBatchIncluded(scene) {
+      const sceneKey = idKey(scene.id);
+      if (multiBatchExcluded.has(sceneKey)) return false;
+      if (hasLargeDurationMismatch(scene)) return multiBatchForcedIncluded.has(sceneKey);
+      return true;
     }
 
     function isGroupIncluded(group) {
@@ -583,6 +712,10 @@
         }
       });
       multiBatchExcluded = new Set([...multiBatchExcluded].filter(sceneId => validMultiIds.has(sceneId)));
+      multiBatchForcedIncluded = new Set([...multiBatchForcedIncluded].filter(sceneId => {
+        const scene = multiFileScenes.find(item => idKey(item.id) === sceneId);
+        return scene && hasLargeDurationMismatch(scene);
+      }));
 
       const dupMap = new Map(dupGroups.map(group => [group.key, group]));
       Object.keys(duplicateKeepers).forEach(groupKey => {
@@ -599,6 +732,7 @@
       allScenes = allScenes.filter(scene => idKey(scene.id) !== sceneKey);
       delete multiKeepers[sceneKey];
       multiBatchExcluded.delete(sceneKey);
+      multiBatchForcedIncluded.delete(sceneKey);
       refreshDerivedState();
     }
 
@@ -613,6 +747,7 @@
       });
       delete multiKeepers[sceneKey];
       multiBatchExcluded.delete(sceneKey);
+      multiBatchForcedIncluded.delete(sceneKey);
       refreshDerivedState();
     }
 
@@ -631,6 +766,7 @@
       sourceIds.forEach(sceneId => {
         delete multiKeepers[sceneId];
         multiBatchExcluded.delete(sceneId);
+        multiBatchForcedIncluded.delete(sceneId);
       });
       delete duplicateKeepers[group.key];
       dupBatchExcluded.delete(group.key);
@@ -674,7 +810,14 @@
       )) return;
 
       try {
-        await executeKeepScene(scene, keeper, extraFiles);
+        await withBusyOperation({
+          label: "Keeping selected file…",
+          detail: `Scene #${scene.id} ${sceneName(scene)}`,
+          total: 1,
+        }, async () => {
+          await executeKeepScene(scene, keeper, extraFiles);
+          updateBusyOperation({ completed: 1 });
+        });
         showTab(currentTab);
         toast(`Kept selected file for scene #${scene.id}`, "#98c379");
       } catch (e) {
@@ -707,7 +850,14 @@
       )) return;
 
       try {
-        await executeMergeGroup(group, keeper, sources);
+        await withBusyOperation({
+          label: "Merging duplicate group…",
+          detail: `Keep #${keeper.id} ${keepTitle}`,
+          total: 1,
+        }, async () => {
+          await executeMergeGroup(group, keeper, sources);
+          updateBusyOperation({ completed: 1 });
+        });
         showTab(currentTab);
         toast(`Merged ${sources.length} scene(s) into #${keeper.id}`, "#61afef");
       } catch (e) {
@@ -717,7 +867,7 @@
 
     async function runMultiBatch() {
       const plans = multiFileScenes
-        .filter(scene => isSceneIncluded(scene))
+        .filter(scene => isSceneBatchIncluded(scene))
         .map(scene => {
           const keeper = getSelectedMultiFile(scene);
           return {
@@ -753,11 +903,32 @@
       )) return;
 
       try {
-        for (const plan of plans) {
-          await executeKeepScene(plan.scene, plan.keeper, plan.extraFiles);
-        }
+        let completedCount = 0;
+        let aborted = false;
+        await withBusyOperation({
+          label: "Running batch keep…",
+          total: plans.length,
+          abortable: true,
+          warning: "Aborting only stops after the current scene finishes. Files already deleted from completed scenes are not restored.",
+        }, async () => {
+          for (const plan of plans) {
+            if (operationState.abortRequested) break;
+            updateBusyOperation({
+              detail: `Scene #${plan.scene.id} ${sceneName(plan.scene)}`,
+              completed: completedCount,
+            });
+            await executeKeepScene(plan.scene, plan.keeper, plan.extraFiles);
+            completedCount++;
+            updateBusyOperation({ completed: completedCount });
+          }
+          aborted = operationState.abortRequested;
+        });
         showTab(currentTab);
-        toast(`Kept selected files for ${plans.length} scene(s)`, "#98c379");
+        if (aborted) {
+          toast(`Batch keep aborted after ${completedCount} of ${plans.length} scene(s). Completed actions were not undone.`, "#e5c07b");
+        } else {
+          toast(`Kept selected files for ${completedCount} scene(s)`, "#98c379");
+        }
       } catch (e) {
         showTab(currentTab);
         toast(`Batch keep error: ${e.message}`, "#e06c75");
@@ -807,17 +978,36 @@
 
       try {
         let mergedCount = 0;
-        for (const groupKey of includedGroupKeys) {
-          const currentGroup = dupGroups.find(group => group.key === groupKey);
-          if (!currentGroup) continue;
-          const keeper = getSelectedDuplicateScene(currentGroup);
-          const sources = currentGroup.scenes.filter(scene => idKey(scene.id) !== idKey(keeper.id));
-          if (!keeper || !sources.length) continue;
-          await executeMergeGroup(currentGroup, keeper, sources);
-          mergedCount++;
-        }
+        let aborted = false;
+        await withBusyOperation({
+          label: "Running batch merge…",
+          total: previewPlans.length,
+          abortable: true,
+          warning: "Aborting only stops after the current group finishes. Merges already completed before the abort are not undone.",
+        }, async () => {
+          for (const groupKey of includedGroupKeys) {
+            if (operationState.abortRequested) break;
+            const currentGroup = dupGroups.find(group => group.key === groupKey);
+            if (!currentGroup) continue;
+            const keeper = getSelectedDuplicateScene(currentGroup);
+            const sources = currentGroup.scenes.filter(scene => idKey(scene.id) !== idKey(keeper.id));
+            if (!keeper || !sources.length) continue;
+            updateBusyOperation({
+              detail: `Keep #${keeper.id} ${sceneName(keeper)}`,
+              completed: mergedCount,
+            });
+            await executeMergeGroup(currentGroup, keeper, sources);
+            mergedCount++;
+            updateBusyOperation({ completed: mergedCount });
+          }
+          aborted = operationState.abortRequested;
+        });
         showTab(currentTab);
-        toast(`Merged ${mergedCount} duplicate group(s)`, "#61afef");
+        if (aborted) {
+          toast(`Batch merge aborted after ${mergedCount} of ${previewPlans.length} group(s). Completed merges were not undone.`, "#e5c07b");
+        } else {
+          toast(`Merged ${mergedCount} duplicate group(s)`, "#61afef");
+        }
       } catch (e) {
         showTab(currentTab);
         toast(`Batch merge error: ${e.message}`, "#e06c75");
@@ -825,13 +1015,22 @@
     }
 
     function renderBatchBar(config) {
-      const { totalCount, includedCount, itemLabel, actionLabel, actionColor, onRun, isDisabled = () => includedCount === 0 } = config;
+      const {
+        totalCount,
+        includedCount,
+        itemLabel,
+        actionLabel,
+        actionColor,
+        onRun,
+        note = "Exclude items you want to skip, then run the batch action.",
+        isDisabled = () => includedCount === 0,
+      } = config;
       const bar = el("div", STYLE.batchBar);
       const summary = includedCount
         ? `${includedCount} of ${totalCount} ${itemLabel} in the batch`
         : `No ${itemLabel} included in the batch`;
       bar.appendChild(el("div", "color:#abb2bf;font-size:0.85em;font-weight:600;", summary));
-      bar.appendChild(el("div", "color:#5c6370;font-size:0.8em;", "Exclude items you want to skip, then run the batch action."));
+      bar.appendChild(el("div", "color:#5c6370;font-size:0.8em;", note));
       bar.appendChild(el("span", "flex:1;"));
 
       const runBtn = mkBtn(actionLabel, actionColor, async () => {
@@ -862,7 +1061,7 @@
 
       if (tab === "multi") {
         if (batchMode) {
-          const includedCount = multiFileScenes.filter(scene => isSceneIncluded(scene)).length;
+          const includedCount = multiFileScenes.filter(scene => isSceneBatchIncluded(scene)).length;
           body.appendChild(renderBatchBar({
             totalCount: multiFileScenes.length,
             includedCount,
@@ -870,23 +1069,47 @@
             actionLabel: dryRun ? "👁 Preview batch keep" : "🧹 Keep selected in batch",
             actionColor: "#98c379",
             onRun: runMultiBatch,
-            isDisabled: () => multiFileScenes.filter(scene => isSceneIncluded(scene)).length === 0,
+            note: multiFileScenes.some(hasLargeDurationMismatch)
+              ? `Scenes with file durations differing by more than ${MAX_BATCH_DURATION_DIFF_SECONDS}s start excluded from the batch.`
+              : "Exclude items you want to skip, then run the batch action.",
+            isDisabled: () => multiFileScenes.filter(scene => isSceneBatchIncluded(scene)).length === 0,
           }));
         }
 
         body.appendChild(renderMultiFileTable(multiFileScenes, {
           dryRun,
           batchMode,
-          isSceneIncluded,
+          isSceneIncluded: isSceneBatchIncluded,
           getSelectedFile: getSelectedMultiFile,
           onSelectFile(sceneId, fileId) {
             multiKeepers[idKey(sceneId)] = idKey(fileId);
             showTab(currentTab);
           },
           onToggleSceneBatch(sceneId) {
+            const scene = multiFileScenes.find(item => idKey(item.id) === idKey(sceneId));
+            if (!scene) return;
             const key = idKey(sceneId);
-            if (multiBatchExcluded.has(key)) multiBatchExcluded.delete(key);
-            else multiBatchExcluded.add(key);
+            const hasDurationMismatch = hasLargeDurationMismatch(scene);
+            const included = isSceneBatchIncluded(scene);
+            if (hasDurationMismatch) {
+              if (included) {
+                multiBatchExcluded.add(key);
+                multiBatchForcedIncluded.delete(key);
+              } else {
+                const durationDiffSeconds = Math.round(sceneDurationDiffSeconds(scene));
+                if (!confirm(
+                  `This scene has file durations that differ by about ${durationDiffSeconds}s, so it starts excluded from batch mode.\n\n` +
+                  `Add it to the batch anyway?\n\n` +
+                  `Batch keep will still delete the non-selected files if you continue.`
+                )) return;
+                multiBatchExcluded.delete(key);
+                multiBatchForcedIncluded.add(key);
+              }
+            } else if (multiBatchExcluded.has(key)) {
+              multiBatchExcluded.delete(key);
+            } else {
+              multiBatchExcluded.add(key);
+            }
             showTab(currentTab);
           },
           onKeepScene: runKeepScene,
