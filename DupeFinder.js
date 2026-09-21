@@ -79,6 +79,7 @@
   function sceneUrl(id) { return `/scenes/${id}`; }
   function fileName(file) { return file.basename || file.path.split(/[/\\]/).pop(); }
   function sceneName(scene) { return scene.title || `#${scene.id}`; }
+  function idKey(id) { return String(id); }
 
   function previewAction(title, lines) {
     alert(`DRY RUN / PREVIEW — ${title}\n\n${lines.join("\n")}`);
@@ -519,9 +520,10 @@
     let loaded = false;
 
     function removeSceneFromState(sceneId) {
-      multiFileScenes = multiFileScenes.filter(scene => scene.id !== sceneId);
+      const sceneKey = idKey(sceneId);
+      multiFileScenes = multiFileScenes.filter(scene => idKey(scene.id) !== sceneKey);
       dupGroups = dupGroups
-        .map(group => group.filter(scene => scene.id !== sceneId))
+        .map(group => group.filter(scene => idKey(scene.id) !== sceneKey))
         .filter(group => group.length > 1);
     }
 
@@ -530,8 +532,9 @@
     }
 
     function refreshMergedGroupState(group, keeperScene) {
-      const sourceIds = new Set(group.filter(scene => scene.id !== keeperScene.id).map(scene => scene.id));
-      const remaining = multiFileScenes.filter(scene => !sourceIds.has(scene.id) && scene.id !== keeperScene.id);
+      const keeperKey = idKey(keeperScene.id);
+      const sourceIds = new Set(group.filter(scene => idKey(scene.id) !== keeperKey).map(scene => idKey(scene.id)));
+      const remaining = multiFileScenes.filter(scene => !sourceIds.has(idKey(scene.id)) && idKey(scene.id) !== keeperKey);
       if ((keeperScene.files || []).length > 1) remaining.push(keeperScene);
       multiFileScenes = findMultiFileScenes(remaining);
       dupGroups = dupGroups.filter(g => g !== group);
