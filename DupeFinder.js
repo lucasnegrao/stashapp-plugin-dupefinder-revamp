@@ -81,6 +81,7 @@
 
   function sceneUrl(id) { return `/scenes/${id}`; }
   function fileName(file) { return file.basename || file.path.split(/[/\\]/).pop(); }
+  function filePathLabel(file) { return file.path || fileName(file); }
   function sceneName(scene) { return scene.title || `#${scene.id}`; }
   function idKey(id) { return String(id); }
   function norm(str) { return (str || "").trim().toLowerCase(); }
@@ -103,7 +104,11 @@
   }
 
   function duplicateGroupKey(scene) {
-    return `${norm(scene.title)}||${(scene.date || "").trim()}||${norm(scene.studio ? scene.studio.name : "")}`;
+    return JSON.stringify([
+      norm(scene.title),
+      (scene.date || "").trim(),
+      norm(scene.studio ? scene.studio.name : ""),
+    ]);
   }
 
   // ── Data fetching ──────────────────────────────────────────────────────────
@@ -157,9 +162,11 @@
   function findDuplicateScenes(scenes) {
     const groups = {};
     for (const scene of scenes) {
-      const key = duplicateGroupKey(scene);
-      const [title, date, studio] = key.split("||");
+      const title = norm(scene.title);
+      const date = (scene.date || "").trim();
+      const studio = norm(scene.studio ? scene.studio.name : "");
       if (!title && !(date && studio)) continue;
+      const key = duplicateGroupKey(scene);
       if (!groups[key]) groups[key] = [];
       groups[key].push(scene);
     }
@@ -635,10 +642,10 @@
 
       if (dryRun) {
         previewAction(`Keep selected file for scene ${sceneName(scene)}`, [
-          `Would keep: ${fileName(keeper)}`,
+          `Would keep: ${filePathLabel(keeper)}`,
           "",
           `Would delete ${extraFiles.length} other file(s):`,
-          ...extraFiles.map(file => `- ${fileName(file)}`),
+          ...extraFiles.map(file => `- ${filePathLabel(file)}`),
         ]);
         return;
       }
@@ -719,9 +726,9 @@
         const lines = [];
         plans.forEach(plan => {
           lines.push(`Scene #${plan.scene.id} ${sceneName(plan.scene)}`);
-          lines.push(`Keep: ${fileName(plan.keeper)}`);
+          lines.push(`Keep: ${filePathLabel(plan.keeper)}`);
           lines.push(`Delete ${plan.extraFiles.length} file(s):`);
-          plan.extraFiles.forEach(file => lines.push(`- ${fileName(file)}`));
+          plan.extraFiles.forEach(file => lines.push(`- ${filePathLabel(file)}`));
           lines.push("");
         });
         previewAction(`Batch keep for ${plans.length} scene(s)`, lines);
