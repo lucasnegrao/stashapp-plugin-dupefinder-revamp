@@ -55,7 +55,7 @@
       error.responseText = text;
       throw error;
     }
-    if (!text.trim()) return null;
+    if (!text.trim()) return {};
     if (!data || typeof data !== "object") throw new Error("Invalid GraphQL response");
     return Object.prototype.hasOwnProperty.call(data, "data") ? data.data : null;
   }
