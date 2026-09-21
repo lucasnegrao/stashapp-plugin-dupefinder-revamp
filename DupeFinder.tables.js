@@ -67,7 +67,12 @@
   function renderSettingsModal({ settings, onSave, onReset, onClose }) {
     const overlay = ui.el("div", "position:absolute;inset:0;background:rgba(0,0,0,0.55);display:flex;align-items:center;justify-content:center;z-index:6;");
     const panel = ui.el("div", "width:560px;max-width:92%;background:#2c313a;border:1px solid #3e4451;border-radius:8px;padding:14px;");
-    panel.appendChild(ui.el("div", "color:#e5c07b;font-weight:700;margin-bottom:10px;", "Settings"));
+    panel.setAttribute("role", "dialog");
+    panel.setAttribute("aria-modal", "true");
+    panel.setAttribute("aria-labelledby", "df-settings-title");
+    const title = ui.el("div", "color:#e5c07b;font-weight:700;margin-bottom:10px;", "Settings");
+    title.id = "df-settings-title";
+    panel.appendChild(title);
 
     const form = ui.el("div", "display:grid;grid-template-columns:1fr 1fr;gap:10px;");
 
@@ -111,7 +116,7 @@
       return wrap;
     }
 
-    form.appendChild(field("Default distance", distanceInput, "Levenshtein title distance for duplicate grouping."));
+    form.appendChild(field("Default distance", distanceInput, "Levenshtein title distance for duplicate grouping. 0 means strict title matching; higher values broaden title-only and same-meta title matching."));
     form.appendChild(field("Best algorithm", algoSelect, "balanced/quality/size ranking for keep selection."));
     form.appendChild(field("Batch duration safety (seconds)", batchDiffInput, "Unsafe groups/scenes start excluded when diff exceeds this."));
 
