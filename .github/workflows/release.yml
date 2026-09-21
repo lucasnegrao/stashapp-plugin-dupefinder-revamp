@@ -1,0 +1,61 @@
+name: Package release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout tagged source
+        uses: actions/checkout@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+
+      - name: Run tests
+        run: node --test tests/*.test.js
+
+      - name: Validate tag and package plugin
+        id: package
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          manifest_version=$(sed -n 's/^version: *"\{0,1\}\([^" ]*\)"\{0,1\}$/\1/p' DupeFinderRevamp.yml)
+          expected_tag="v${manifest_version}"
+          if [[ "$GITHUB_REF_NAME" != "$expected_tag" ]]; then
+            echo "Tag $GITHUB_REF_NAME does not match DupeFinderRevamp.yml version $manifest_version" >&2
+            exit 1
+          fi
+
+          archive="DupeFinder-Revamp-${GITHUB_REF_NAME}.zip"
+          git archive \
+            --format=zip \
+            --prefix=DupeFinderRevamp/ \
+            --output="$archive" \
+            "$GITHUB_SHA" \
+            README.md DupeFinderRevamp.yml DupeFinder.actions.js DupeFinder.analysis.js \
+            DupeFinder.api.js DupeFinder.js DupeFinder.modal.js \
+            DupeFinder.shared.js DupeFinder.tables.js
+          sha256sum "$archive" > "$archive.sha256"
+
+          echo "archive=$archive" >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ARCHIVE: ${{ steps.package.outputs.archive }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            "$ARCHIVE" "$ARCHIVE.sha256" \
+            --verify-tag \
+            --title "DupeFinder Revamp $GITHUB_REF_NAME" \
+            --generate-notes

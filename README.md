@@ -1,102 +1,190 @@
-# DupeFinder
+# DupeFinder Revamp
 
-A [Stash](https://github.com/stashapp/stash) plugin that finds duplicate scenes and multi-file scenes in your library, and lets you merge or delete them directly from a modal.
+DupeFinder Revamp is a client-side plugin for
+[Stash](https://github.com/stashapp/stash) that finds duplicate scenes and
+multi-file scenes, then helps you review, split, merge, or clean them up.
+
+This project began with the DupeFinder plugin from
+[zzzinsCode/stashapp-plugins](https://github.com/zzzinsCode/stashapp-plugins),
+but has since been substantially rewritten. The new name distinguishes this
+version and its behavior from the original plugin. Its plugin ID is
+`DupeFinderRevamp`; the JavaScript filename prefix remains `DupeFinder`.
 
 ---
 
 ## Features
 
-- **Duplicate detection modes** — switch between pHash-first matching with a legacy fallback pass only for scenes without pHash, or legacy-only title/date/studio matching
-- **Multi-file scene detection** — finds scenes that have more than one file attached
-- **Click-to-keep selection** — click any file row or duplicate-scene row to choose exactly what should be kept; click a selected multi-file row again to clear its keep selection
-- **Consistent keep labeling** — the selected keeper is always marked **keep** so the UI reflects your choice
-- **Batch mode for both tabs** — exclude any scene/group from the batch, then apply keep or merge to everything still included
-- **Safer batch defaults** — multi-file scenes and duplicate groups with large duration diffs start excluded from batch mode until you explicitly confirm them
-- **Immediate duplicate controls** — switch duplicate mode and pHash distance from the main modal header; changes save and refresh results automatically
-- **Settings modal** — configure legacy fallback distance, automatic keep selection, maximum duration difference, and additional behavior toggles
-- **Stable table layout** — fixed-width columns on both tabs with Actions first, plus pHash on both tables and Duration in duplicates
-- **Keep selected file cleanup** — in the Multi-file tab, keep the selected file and delete the rest without deleting the scene
-- **Split multi-file scenes** — keep the selected file on the original scene and move every other file into a scene without copied metadata, or clear the keep selection so no file reuses the original metadata
-- **Merge duplicates into selected keep** — in the Duplicates tab, combine metadata into the selected keep scene and delete every non-keeper scene and its files
-- **Dry run / preview mode** — preview cleanup, merge, and batch actions before anything destructive happens
-- **Batch progress + abort** — batch runs lock the modal, show progress, and can abort the remaining items without undoing completed actions
-- **Native Stash launchers** — always available under **Settings → Tools**, with an optional icon-only header button enabled by default
-- **No Python required** — pure JavaScript, client-side only
+- **Duplicate detection modes** — use pHash-first matching with an optional legacy fallback for scenes without pHash, or use legacy-only title/date/studio matching
+- **Multi-file scene detection** — find scenes that have more than one attached file
+- **Explicit keep selection** — click a file or scene row to choose what remains; click a selected multi-file row again to clear the selection
+- **Keep, split, and merge actions** — clean a multi-file scene, split its files into separate scenes, or merge duplicate scenes into the selected keeper
+- **Batch mode** — apply Keep or Split to included multi-file scenes and Merge to included duplicate groups
+- **Safety filtering** — scenes and groups with large duration differences can start excluded from batch operations
+- **Preview mode** — inspect destructive operations before executing them
+- **Automatic keep selection** — rank candidates by balanced, quality, or size-based rules
+- **Progress and abort controls** — see batch progress and stop remaining work after the current item finishes
+- **Native Stash launchers** — always available in **Settings → Tools**, with an optional header icon enabled by default
+- **Bundled help** — open **?** in the plugin header to read the documentation installed with your exact version
+- **No Python dependency** — all processing runs in the Stash frontend
 
 ---
 
 ## Installation
 
-1. Copy the `DupeFinder` folder into your Stash plugins directory:
+### Stash plugin source — recommended
+
+1. Open **Settings → Plugins** in Stash.
+2. Under **Available Plugins**, add this source:
+
+   ```text
+   https://lucasnegrao.github.io/stashapp-plugins/main/index.yml
    ```
-   C:\Users\<you>\.stash\plugins\DupeFinder\
+
+3. Reload the available plugins if necessary.
+4. Install **DupeFinder Revamp**.
+5. Open it from **Settings → Tools → DupeFinder Revamp** or from the layers icon in the main header.
+
+Updates published by the source will appear in Stash's plugin manager.
+
+### Upgrading from the pre-rebrand build
+
+Early development builds used `DupeFinder.yml` and the `DupeFinder` plugin ID.
+Remove or disable that build before installing `DupeFinderRevamp.yml`; otherwise
+Stash can load both plugins and show duplicate launchers. The directory name
+does not define the plugin ID—the YAML filename does.
+
+### Release ZIP
+
+1. Download `DupeFinder-Revamp-vX.Y.Z.zip` from the
+   [latest GitHub release](https://github.com/lucasnegrao/stashapp-plugin-dupefinder-revamp/releases/latest).
+2. Extract its `DupeFinderRevamp` directory into your Stash plugins directory.
+3. Confirm that the resulting layout contains:
+
+   ```text
+   plugins/
+   └── DupeFinderRevamp/
+       ├── DupeFinderRevamp.yml
+       ├── DupeFinder.js
+       └── ...
    ```
-2. In Stash, go to **Settings → Plugins** and click **Reload Plugins**
-3. Open **Settings → Tools → DupeFinder**; an icon-only DupeFinder button also appears in the Stash header by default
-4. To hide the header icon, disable **Show DupeFinder in header** in **Settings → Plugins → DupeFinder**. The Tools entry remains available.
+
+4. In Stash, open **Settings → Plugins** and select **Reload Plugins**.
+
+The default plugin directory is the `plugins` directory beside the Stash
+configuration file. Your configured plugin path may be different.
+
+### Git checkout
+
+```bash
+git clone https://github.com/lucasnegrao/stashapp-plugin-dupefinder-revamp.git DupeFinderRevamp
+```
+
+Place the resulting `DupeFinderRevamp` directory inside your configured Stash
+plugins directory, then reload plugins.
 
 ---
 
 ## Usage
 
-1. Open **DupeFinder** from **Settings → Tools**, or click its search icon in the Stash header
-2. The plugin loads all scenes from your library (progress shown while loading)
-3. Optional: press **PREVIEW** in the modal header to preview destructive actions before executing them
-4. Optional: press **BATCH** to work through many scenes/groups at once while excluding anything you want to skip
-5. Choose duplicate mode and, in pHash mode, pHash distance directly from the modal header; changes refresh the results automatically
-6. Optional: open **⚙** to tune ranking, legacy fallback, and batch safety behavior
-7. Two tabs are shown:
+1. Open **DupeFinder Revamp** from **Settings → Tools** or select its layers icon in the Stash header.
+2. Wait while the plugin loads the scenes in your library.
+3. Optionally enable **PREVIEW** before testing destructive actions.
+4. Optionally enable **BATCH** to operate on multiple included scenes or groups.
+5. Choose `pHash` or `Legacy` matching in the header. In pHash mode, choose the desired distance preset.
+6. Open **⚙** for automatic selection and safety settings, or **?** for this documentation.
 
 ### Multi-file tab
-Lists every scene that has more than one file attached, sorted by file count. Click a file row to choose which file to **keep**. The selected file is highlighted and marked **keep**.
 
-Available actions:
-- **🧹 Keep** — keeps the currently selected file, safely makes it the scene's primary file if needed, and deletes the other files from disk
-- **✂ Split** — keeps the selected file on the current scene and creates new scenes for the remaining files using copied scene metadata
-- In **Batch mode**, exclude any scenes you want to skip, then run **Keep** or **Split** across the eligible included scenes
-- Scenes whose file durations differ by more than the configured safety threshold start **Excluded** in batch mode and ask for confirmation before being re-added
-- Clicking the selected keep file again clears the selection. **Keep** is then disabled for that scene, while **Split** creates a new scene without copied metadata for every file and removes the original scene and its metadata.
-- In **Dry run / preview mode**, these actions show what would be kept or deleted without making changes
+The Multi-file tab lists scenes with more than one attached file. Click a file
+row to select the file to keep. Click the selected row again to clear the keep
+selection.
+
+- **Keep** preserves the selected file on the current scene and permanently deletes its other files from disk. Keep is disabled when no file is selected.
+- **Split** preserves the selected file and its current scene metadata, then moves every other file into a new scene with no copied metadata.
+- If no keep file is selected, **Split** moves every file into a new scene with no copied metadata, then removes the original scene and its metadata without deleting its files.
+- In Batch mode, exclude anything you do not want processed, then run Keep or Split across the remaining eligible scenes.
 
 ### Duplicates tab
-Lists groups of scenes using the selected duplicate finder mode. In **pHash** mode, scenes match by pHash distance first and only scenes without pHash then go through the legacy title/date/studio matcher. In **Legacy** mode, all duplicate matching uses the legacy matcher. Click any scene row to choose the scene to **keep** before merging.
 
-Available actions:
-- **⚡ Merge** — combines metadata into the currently selected keep scene, then deletes every non-keeper scene and its files from disk; the keep scene's existing files are preserved
-- In **Batch mode**, exclude any groups you want to skip, then run **Merge** to process all included groups
-- Unsafe groups (large duration differences) can start excluded in batch mode and require explicit confirmation before inclusion
-- While a batch is running, the modal shows progress, disables other interactions, and lets you abort the remaining items only
-- In **Dry run / preview mode**, merge and batch actions preview the destination keeper plus every source scene and file that would be removed
+The Duplicates tab displays groups produced by the active matching mode. Click
+a scene row to select the keeper.
 
----
-
-## How duplicates are detected
-
-Two scenes are considered duplicates when:
-- In **pHash** mode, their pHashes are within the configured Hamming distance, or they have no pHash and the legacy matcher decides they match
-- In **Legacy** mode, the legacy matcher decides they match based on title and/or date+studio
-
-The duplicate mode controls are in the main modal header:
-- **Mode** switches between `pHash` and `Legacy` and refreshes results immediately
-- **pHash distance** appears in pHash mode and uses presets: `Exact (0)`, `High (4)`, `Medium (8)`, `Low (10)`
-
-Additional settings can be tuned in **⚙**:
-- **Legacy title distance** controls the Levenshtein fallback used by legacy mode and by the no-pHash fallback pass in pHash mode
-- **Maximum duration difference** offers `Any`, `Equal`, `1 s`, `5 s`, and `10 s` for batch safety filtering
-
-Legacy fallback scenes with no title and no date+studio combination are excluded from duplicate detection.
+- **Merge** combines metadata into the selected keep scene.
+- Non-keeper scenes and all files belonging to them are then permanently deleted.
+- Files already attached to the keep scene remain in place.
+- In Batch mode, exclude groups you do not want processed, then run Merge.
 
 ---
 
-## Codec ranking (best → worst)
+## Duplicate detection
 
-`av1` → `hevc / h265` → `vp9` → `h264 / avc` → `mpeg4` → `mpeg2`
+In **pHash** mode, the plugin asks Stash for pHash duplicate groups at the
+selected Hamming-distance preset. If **Use legacy when files have no pHash** is
+enabled, scenes without a pHash also pass through the legacy matcher.
+
+In **Legacy** mode, matching uses normalized titles and/or matching date and
+studio metadata. Scenes with neither a usable title nor a date-and-studio
+combination are excluded from legacy duplicate detection.
+
+The pHash presets are:
+
+- **Exact** — all pHash bits must match
+- **High** — up to 4 differing bits
+- **Medium** — up to 8 differing bits
+- **Low** — up to 10 differing bits
+
+The numeric distances are intentionally omitted from the main interface and
+shown here for reference.
 
 ---
 
-## Notes
+## Settings
 
-- Loading time scales with library size — large libraries (10,000+ scenes) may take a few seconds
-- Keep, merge, delete, and batch actions are permanent and cannot be undone from within the plugin unless you first use **Dry run / preview mode** to inspect them
-- Aborting a batch only stops the remaining items; anything already kept, merged, or deleted stays changed
-- The Tools launcher is always available; only the header icon is controlled by the plugin setting
+The **⚙** dialog provides:
+
+- **Legacy title distance** — controls how far normalized titles may differ in legacy matching
+- **Automatic keep selection** — chooses Balanced, Quality, or Size ranking
+- **Maximum duration difference** — sets the threshold used by batch safety checks
+- **Auto-exclude unsafe duplicate groups** — starts risky groups outside the batch
+- **Use legacy when files have no pHash** — enables the legacy fallback during pHash matching
+- **Prefer organized scenes** — uses organized status as a tie-break when selecting the best scene
+
+The Stash plugin settings page also provides **Show DupeFinder Revamp in
+header**. Disabling it hides only the header launcher; the Tools launcher
+remains available.
+
+### Codec ranking
+
+When codec quality is considered, the order from best to worst is:
+
+```text
+av1 → hevc / h265 → vp9 → h264 / avc → mpeg4 → mpeg2
+```
+
+---
+
+## Safety notes
+
+- Keep and Merge can permanently delete video files from disk.
+- Split changes scene/file associations and may delete the original scene metadata when no keeper is selected.
+- Preview mode does not change your library and should be used before unfamiliar operations.
+- Aborting a batch stops only the remaining items. Completed actions are not undone.
+- Loading time grows with the size of the Stash library.
+- Back up your Stash database before performing large cleanup operations.
+
+---
+
+## Development
+
+The plugin is intentionally dependency-free at runtime. Its source files stay
+at the repository root. The manifest filename defines the `DupeFinderRevamp`
+plugin ID; the JavaScript filenames do not affect that identity.
+
+Run the available JavaScript tests with:
+
+```bash
+node --test tests/*.test.js
+```
+
+Release tags must match the version in `DupeFinderRevamp.yml`, prefixed with `v`.
+For example, version `1.1.0` is released with tag `v1.1.0`.

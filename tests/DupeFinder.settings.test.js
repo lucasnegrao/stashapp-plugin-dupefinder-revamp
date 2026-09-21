@@ -20,6 +20,14 @@ function loadPluginCore() {
   return context.window.DupeFinder;
 }
 
+test("uses the revamp plugin identity and bundled README asset", () => {
+  const { constants } = loadPluginCore();
+
+  assert.equal(constants.PLUGIN_ID, "DupeFinderRevamp");
+  assert.equal(constants.PRODUCT_NAME, "DupeFinder Revamp");
+  assert.equal(constants.README_ASSET_URL, "/plugin/DupeFinderRevamp/assets/README.md");
+});
+
 test("maximum duration difference accepts only the combobox choices", () => {
   const { settings } = loadPluginCore();
 

@@ -462,7 +462,7 @@
       header.style.display = "grid";
       header.style.gridTemplateColumns = "minmax(0,1fr) auto minmax(0,1fr)";
       header.style.alignItems = "center";
-      const titleEl = ui.el("span", "color:#e5c07b;font-weight:700;font-size:1.1em;justify-self:start;align-self:center;white-space:nowrap;", "🔍 DupeFinder");
+      const titleEl = ui.el("span", "color:#e5c07b;font-weight:700;font-size:1.1em;justify-self:start;align-self:center;white-space:nowrap;", `${constants.PRODUCT_ICON} ${constants.PRODUCT_NAME}`);
       const controls = ui.el("div", "display:flex;align-items:center;align-self:center;justify-content:center;gap:18px;flex-wrap:nowrap;");
       const headerActions = ui.el("div", "display:flex;align-items:center;align-self:center;justify-self:end;gap:10px;");
       const headerSelectStyle = "box-sizing:border-box;width:110px;height:38px;background:#2c313a;border:1px solid #3e4451;color:#abb2bf;border-radius:4px;padding:0 10px;font-size:0.8em;";
@@ -530,10 +530,11 @@
       syncHeaderSettingsControls();
 
       const closeBtn = ui.mkBtn("✕", "#3e4451", () => overlay.remove());
-      closeBtn.setAttribute("aria-label", "Close DupeFinder");
+      closeBtn.setAttribute("aria-label", `Close ${constants.PRODUCT_NAME}`);
       closeBtn.title = "Close";
       const settingsBtn = ui.mkBtn("⚙", "#56b6c2", () => {
         if (settingsOverlay && settingsOverlay.isConnected) return;
+        if (helpOverlay && helpOverlay.isConnected) helpOverlay.remove();
         settingsOverlay = tables.renderSettingsModal({
           settings: state.settings,
           async onSave(raw) {
@@ -550,8 +551,20 @@
         modal.appendChild(settingsOverlay);
       });
       settingsBtn.title = "Settings";
-      settingsBtn.setAttribute("aria-label", "Open DupeFinder settings");
-      [settingsBtn, closeBtn].forEach(btn => {
+      settingsBtn.setAttribute("aria-label", `Open ${constants.PRODUCT_NAME} settings`);
+      const helpBtn = ui.mkBtn("?", "#61afef", () => {
+        if (helpOverlay && helpOverlay.isConnected) return;
+        if (settingsOverlay && settingsOverlay.isConnected) settingsOverlay.remove();
+        helpOverlay = tables.renderHelpModal({
+          onClose() {
+            if (helpOverlay && helpOverlay.parentNode) helpOverlay.remove();
+          },
+        });
+        modal.appendChild(helpOverlay);
+      });
+      helpBtn.title = "Help and documentation";
+      helpBtn.setAttribute("aria-label", `Open ${constants.PRODUCT_NAME} help`);
+      [helpBtn, settingsBtn, closeBtn].forEach(btn => {
         btn.style.display = "inline-flex";
         btn.style.alignItems = "center";
         btn.style.justifyContent = "center";
@@ -561,6 +574,8 @@
         btn.style.padding = "0";
         btn.style.lineHeight = "1";
       });
+      helpBtn.style.fontSize = "1.05em";
+      helpBtn.style.fontWeight = "700";
       settingsBtn.style.fontSize = "1.3em";
       closeBtn.style.fontSize = "1em";
       modal.appendChild(header);
@@ -575,6 +590,7 @@
       body.appendChild(loadingEl);
 
       let settingsOverlay = null;
+      let helpOverlay = null;
       const busyOverlay = ui.el("div", "position:absolute;inset:0;display:none;align-items:center;justify-content:center;background:rgba(33,37,43,0.82);z-index:4;padding:20px;");
       const busyPanel = ui.el("div", "background:#2c313a;border:1px solid #3e4451;border-radius:8px;padding:18px 20px;min-width:320px;max-width:520px;box-shadow:0 8px 32px rgba(0,0,0,0.45);");
       const busyTitleEl = ui.el("div", "color:#e5c07b;font-weight:700;font-size:1em;");
@@ -602,7 +618,8 @@
       modal.appendChild(busyOverlay);
 
       function updateTitle() {
-        titleEl.textContent = state.batchMode ? `🔍 DupeFinder — ${state.currentTab === "multi" ? "Multi-file" : "Duplicates"} batch mode` : "🔍 DupeFinder";
+        const productTitle = `${constants.PRODUCT_ICON} ${constants.PRODUCT_NAME}`;
+        titleEl.textContent = state.batchMode ? `${productTitle} — ${state.currentTab === "multi" ? "Multi-file" : "Duplicates"} batch mode` : productTitle;
       }
 
       function renderBusyState() {
@@ -1075,6 +1092,7 @@
       controls.appendChild(phashDistanceSelect);
       controls.appendChild(previewBtn);
       controls.appendChild(batchBtn);
+      headerActions.appendChild(helpBtn);
       headerActions.appendChild(settingsBtn);
       headerActions.appendChild(closeBtn);
       header.appendChild(controls);
@@ -1115,7 +1133,7 @@
       const React = pluginApi.React;
       const { Button } = pluginApi.libraries.Bootstrap;
       const { FontAwesomeIcon } = pluginApi.libraries.ReactFontAwesome;
-      const { faSearch } = pluginApi.libraries.FontAwesomeSolid;
+      const { faLayerGroup } = pluginApi.libraries.FontAwesomeSolid;
       let defaultInitializationStarted = false;
 
       function HeaderLauncher() {
@@ -1148,9 +1166,9 @@
           className: "nav-utility minimal",
           "data-plugin": "dupefinder",
           onClick: openModal,
-          title: "Open DupeFinder",
-          "aria-label": "Open DupeFinder",
-        }, React.createElement(FontAwesomeIcon, { icon: faSearch, className: "fa-icon" }));
+          title: `Open ${constants.PRODUCT_NAME}`,
+          "aria-label": `Open ${constants.PRODUCT_NAME}`,
+        }, React.createElement(FontAwesomeIcon, { icon: faLayerGroup, className: "fa-icon" }));
       }
 
       pluginApi.patch.before("MainNavBar.UtilityItems", props => [{
@@ -1163,7 +1181,7 @@
         const { Setting } = pluginApi.components;
         const launcher = React.createElement(Setting, {
           key: "dupefinder-tools-launcher",
-          heading: React.createElement(Button, { onClick: openModal }, "🔍 DupeFinder"),
+          heading: React.createElement(Button, { onClick: openModal }, `${constants.PRODUCT_ICON} ${constants.PRODUCT_NAME}`),
           subHeading: "Find and manage duplicate and multi-file scenes.",
         });
         return [{

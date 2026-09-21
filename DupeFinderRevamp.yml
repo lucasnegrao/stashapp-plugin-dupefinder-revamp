@@ -1,0 +1,22 @@
+name: DupeFinder Revamp
+description: Find duplicate scenes and clean up multi-file scenes in your Stash library.
+version: "1.0"
+url: "https://github.com/lucasnegrao/stashapp-plugin-dupefinder-revamp"
+
+settings:
+  showHeaderButton:
+    displayName: Show DupeFinder Revamp in header
+    description: Show an icon-only DupeFinder Revamp button in the Stash header. The Tools entry remains available when disabled.
+    type: BOOLEAN
+
+ui:
+  assets:
+    /: .
+  javascript:
+    - DupeFinder.shared.js
+    - DupeFinder.api.js
+    - DupeFinder.actions.js
+    - DupeFinder.analysis.js
+    - DupeFinder.tables.js
+    - DupeFinder.modal.js
+    - DupeFinder.js

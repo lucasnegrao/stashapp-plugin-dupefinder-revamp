@@ -1,7 +1,7 @@
 (function () {
   "use strict";
   const root = window.DupeFinder = window.DupeFinder || {};
-  const { ui, helpers, defaults, analysis } = root;
+  const { ui, helpers, defaults, analysis, constants } = root;
   const STYLE = defaults.style;
 
   function headerTable(columns) {
@@ -61,6 +61,189 @@
       bar.appendChild(runBtn);
     });
     return bar;
+  }
+
+  function appendInlineMarkdown(container, text) {
+    const pattern = /(\[([^\]]+)\]\(([^)]+)\)|\*\*([^*]+)\*\*|`([^`]+)`)/g;
+    let offset = 0;
+    let match;
+
+    while ((match = pattern.exec(text)) !== null) {
+      if (match.index > offset) container.appendChild(document.createTextNode(text.slice(offset, match.index)));
+      if (match[2] !== undefined) {
+        const link = document.createElement("a");
+        link.textContent = match[2];
+        try {
+          const href = new URL(match[3], `${constants.REPOSITORY_URL}/blob/main/README.md`);
+          if (!["http:", "https:"].includes(href.protocol)) throw new Error("Unsupported link protocol");
+          link.href = href.href;
+          link.target = "_blank";
+          link.rel = "noopener noreferrer";
+          link.style.cssText = STYLE.link;
+        } catch (_) {
+          link.removeAttribute("href");
+        }
+        container.appendChild(link);
+      } else if (match[4] !== undefined) {
+        const strong = document.createElement("strong");
+        strong.textContent = match[4];
+        container.appendChild(strong);
+      } else {
+        const code = document.createElement("code");
+        code.textContent = match[5];
+        code.style.cssText = "background:#21252b;border-radius:3px;padding:1px 4px;color:#e5c07b;";
+        container.appendChild(code);
+      }
+      offset = pattern.lastIndex;
+    }
+
+    if (offset < text.length) container.appendChild(document.createTextNode(text.slice(offset)));
+  }
+
+  function renderMarkdown(markdown, container) {
+    container.innerHTML = "";
+    let list = null;
+    let listType = null;
+    let codeLines = null;
+    let paragraphLines = [];
+
+    function appendBlock(tag, text, style) {
+      const block = ui.el(tag, style || "");
+      appendInlineMarkdown(block, text);
+      container.appendChild(block);
+    }
+
+    function flushParagraph() {
+      if (!paragraphLines.length) return;
+      appendBlock("p", paragraphLines.join(" "), "margin:6px 0 9px;line-height:1.5;");
+      paragraphLines = [];
+    }
+
+    function flushCode() {
+      if (codeLines === null) return;
+      const pre = ui.el("pre", "background:#181a1f;border:1px solid #3e4451;border-radius:5px;padding:10px;overflow:auto;color:#abb2bf;font-size:0.82em;white-space:pre-wrap;");
+      const code = document.createElement("code");
+      code.textContent = codeLines.join("\n");
+      pre.appendChild(code);
+      container.appendChild(pre);
+      codeLines = null;
+    }
+
+    String(markdown || "").replace(/\r\n/g, "\n").split("\n").forEach(line => {
+      if (/^```/.test(line)) {
+        if (codeLines === null) {
+          flushParagraph();
+          list = null;
+          listType = null;
+          codeLines = [];
+        } else {
+          flushCode();
+        }
+        return;
+      }
+      if (codeLines !== null) {
+        codeLines.push(line);
+        return;
+      }
+
+      const heading = line.match(/^(#{1,4})\s+(.+)$/);
+      if (heading) {
+        flushParagraph();
+        list = null;
+        listType = null;
+        const level = Math.min(heading[1].length + 1, 5);
+        appendBlock(`h${level}`, heading[2], `color:#e5c07b;margin:${level === 2 ? "18px" : "14px"} 0 7px;font-size:${level === 2 ? "1.35em" : "1.05em"};`);
+        return;
+      }
+      if (/^\s*---+\s*$/.test(line)) {
+        flushParagraph();
+        list = null;
+        listType = null;
+        container.appendChild(ui.el("hr", "border:0;border-top:1px solid #3e4451;margin:16px 0;"));
+        return;
+      }
+
+      const unordered = line.match(/^\s*-\s+(.+)$/);
+      const ordered = line.match(/^\s*\d+\.\s+(.+)$/);
+      if (unordered || ordered) {
+        flushParagraph();
+        const nextType = ordered ? "ol" : "ul";
+        if (!list || listType !== nextType) {
+          list = ui.el(nextType, "margin:6px 0 10px;padding-left:24px;");
+          listType = nextType;
+          container.appendChild(list);
+        }
+        const item = document.createElement("li");
+        item.style.marginBottom = "4px";
+        appendInlineMarkdown(item, (unordered || ordered)[1]);
+        list.appendChild(item);
+        return;
+      }
+
+      list = null;
+      listType = null;
+      if (!line.trim()) {
+        flushParagraph();
+        return;
+      }
+      if (/^>\s?/.test(line)) {
+        flushParagraph();
+        appendBlock("blockquote", line.replace(/^>\s?/, ""), "border-left:3px solid #56b6c2;margin:10px 0;padding:3px 10px;color:#9aa3b2;");
+        return;
+      }
+      paragraphLines.push(line.trim());
+    });
+    flushParagraph();
+    flushCode();
+  }
+
+  function renderHelpModal({ onClose }) {
+    const overlay = ui.el("div", "position:absolute;inset:0;background:rgba(0,0,0,0.62);display:flex;align-items:center;justify-content:center;z-index:6;padding:20px;");
+    const panel = ui.el("div", "width:860px;max-width:96%;height:82vh;max-height:900px;background:#2c313a;border:1px solid #3e4451;border-radius:8px;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 8px 32px rgba(0,0,0,0.5);");
+    panel.setAttribute("role", "dialog");
+    panel.setAttribute("aria-modal", "true");
+    panel.setAttribute("aria-labelledby", "df-help-title");
+
+    const header = ui.el("div", "display:flex;align-items:center;gap:10px;padding:12px 14px;border-bottom:1px solid #3e4451;flex-shrink:0;");
+    const title = ui.el("div", "color:#e5c07b;font-weight:700;font-size:1em;", `${constants.PRODUCT_ICON} ${constants.PRODUCT_NAME} help`);
+    title.id = "df-help-title";
+    const spacer = ui.el("span", "flex:1;");
+    const repoLink = document.createElement("a");
+    repoLink.href = constants.REPOSITORY_URL;
+    repoLink.target = "_blank";
+    repoLink.rel = "noopener noreferrer";
+    repoLink.textContent = "View on GitHub ↗";
+    repoLink.style.cssText = "color:#61afef;text-decoration:none;font-size:0.82em;font-weight:600;";
+    const closeBtn = ui.mkBtn("✕", "#3e4451", onClose);
+    closeBtn.title = "Close help";
+    closeBtn.setAttribute("aria-label", "Close help");
+    closeBtn.style.cssText += "width:34px;height:34px;padding:0;display:inline-flex;align-items:center;justify-content:center;";
+    header.append(title, spacer, repoLink, closeBtn);
+
+    const content = ui.el("div", "flex:1;overflow-y:auto;padding:12px 18px 22px;color:#abb2bf;font-size:0.88em;", "Loading bundled README…");
+    panel.append(header, content);
+    overlay.appendChild(panel);
+    overlay.addEventListener("click", event => { if (event.target === overlay) onClose(); });
+
+    fetch(constants.README_ASSET_URL, { credentials: "same-origin", cache: "no-store" })
+      .then(response => {
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        return response.text();
+      })
+      .then(markdown => renderMarkdown(markdown, content))
+      .catch(error => {
+        content.innerHTML = "";
+        content.appendChild(ui.el("p", "color:#e06c75;line-height:1.5;", `The bundled README could not be loaded (${error.message}).`));
+        const fallback = document.createElement("a");
+        fallback.href = constants.REPOSITORY_URL;
+        fallback.target = "_blank";
+        fallback.rel = "noopener noreferrer";
+        fallback.textContent = "Open the project documentation on GitHub";
+        fallback.style.cssText = STYLE.link;
+        content.appendChild(fallback);
+      });
+
+    return overlay;
   }
 
   function renderSettingsModal({ settings, onSave, onReset, onClose }) {
@@ -126,7 +309,7 @@
     const legacyDistanceField = field("Legacy title distance", legacyDistanceInput, "Used in legacy mode or as the fallback pass only for scenes without pHash. 0 means strict title matching; higher values broaden title-only and same-meta title matching.");
 
     form.appendChild(legacyDistanceField);
-    form.appendChild(field("Automatic keep selection", algoSelect, "Choose how DupeFinder automatically selects the file or scene to keep: Balanced, Quality, or Size."));
+    form.appendChild(field("Automatic keep selection", algoSelect, `Choose how ${constants.PRODUCT_NAME} automatically selects the file or scene to keep: Balanced, Quality, or Size.`));
     form.appendChild(field("Maximum duration difference", batchDiffSelect, "Any allows every duration difference. Equal requires matching durations; the other choices set the maximum allowed difference."));
 
     const unsafeLabel = ui.el("label", "display:flex;align-items:center;gap:8px;color:#abb2bf;font-size:0.82em;");
@@ -390,6 +573,7 @@
 
   root.tables = {
     renderBatchBar,
+    renderHelpModal,
     renderSettingsModal,
     renderMultiFileTable,
     renderDuplicatesTable,
