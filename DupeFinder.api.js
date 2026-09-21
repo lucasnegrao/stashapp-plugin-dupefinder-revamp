@@ -7,6 +7,20 @@
     supportsExtendedSceneFields: true,
     supportsSceneSplit: null,
   };
+  const extendedSceneFields = [
+    "code",
+    "details",
+    "director",
+    "urls",
+    "production_date",
+    "rating100",
+    "galleries { id }",
+    "groups { scene_index group { id name } }",
+  ];
+  const extendedSceneFieldNames = ["code", "details", "director", "urls", "production_date", "rating100", "galleries", "groups", "scene_index"];
+  const quotedExtendedSceneFieldPatterns = extendedSceneFieldNames.map(fieldName =>
+    new RegExp(`["'\`]${fieldName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}["'\`]`, "i")
+  );
   root.runtime = runtime;
 
   async function gql(query, variables) {
@@ -22,11 +36,7 @@
   }
 
   function sceneFragment(includeFingerprints, includeExtendedFields) {
-    const extendedFields = includeExtendedFields ? `
-      code details director urls production_date rating100
-      galleries { id }
-      groups { scene_index group { id name } }
-    ` : "";
+    const extendedFields = includeExtendedFields ? extendedSceneFields.join("\n") : "";
     return `
       id title date organized
       studio { id name }
@@ -44,21 +54,33 @@
     const message = String((error && error.message) || "");
     if (!runtime.supportsExtendedSceneFields) return false;
     if (!/(Cannot query field|Unknown field|Unknown argument|does not exist)/i.test(message)) return false;
-    return /(code|details|director|urls|production_date|rating100|galleries|groups|scene_index)/i.test(message);
+    return quotedExtendedSceneFieldPatterns.some(pattern => pattern.test(message));
   }
 
-  async function withSceneCompatibility(runQuery) {
-    for (let i = 0; i < 3; i++) {
+  function supportsFingerprintFallback(error) {
+    const message = String((error && error.message) || "");
+    if (!runtime.supportsFingerprints) return false;
+    if (!/(Cannot query field|Unknown field|Unknown argument|does not exist)/i.test(message)) return false;
+    return /fingerprints/i.test(message);
+  }
+
+  async function withSceneCompatibility(runQuery, options) {
+    let includeFingerprints = runtime.supportsFingerprints;
+    let includeExtendedFields = runtime.supportsExtendedSceneFields;
+    const updateExtendedRuntime = !options || options.updateExtendedRuntime !== false;
+
+    for (let i = 0; i < 4; i++) {
       try {
-        return await runQuery(runtime.supportsFingerprints, runtime.supportsExtendedSceneFields);
+        return await runQuery(includeFingerprints, includeExtendedFields);
       } catch (error) {
-        const message = String((error && error.message) || "");
-        if (runtime.supportsFingerprints && /fingerprints/i.test(message)) {
+        if (includeFingerprints && supportsFingerprintFallback(error)) {
+          includeFingerprints = false;
           runtime.supportsFingerprints = false;
           continue;
         }
-        if (supportsExtendedFieldFallback(error)) {
-          runtime.supportsExtendedSceneFields = false;
+        if (includeExtendedFields && supportsExtendedFieldFallback(error)) {
+          includeExtendedFields = false;
+          if (updateExtendedRuntime) runtime.supportsExtendedSceneFields = false;
           continue;
         }
         throw error;
@@ -186,7 +208,7 @@
           }
         `, { input });
         return d.sceneCreate;
-      });
+      }, { updateExtendedRuntime: false });
     },
     async assignSceneFile(sceneId, fileId) {
       return gql(`
