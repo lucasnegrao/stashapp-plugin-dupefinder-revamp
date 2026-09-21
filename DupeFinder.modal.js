@@ -120,10 +120,7 @@
           phashGroups = analysis.findPhashDuplicateScenes(state.allScenes, state.settings);
         }
 
-        const phashSceneIds = new Set(
-          phashGroups.flatMap(group => group.scenes.map(scene => helpers.idKey(scene.id)))
-        );
-        const fallbackScenes = state.allScenes.filter(scene => !phashSceneIds.has(helpers.idKey(scene.id)));
+        const fallbackScenes = state.allScenes.filter(scene => !analysis.sceneHasPhash(scene, state.settings));
         const legacyGroups = analysis.findLegacyDuplicateScenes(fallbackScenes, state.settings);
         state.dupGroups = analysis.sortDuplicateGroups(phashGroups.concat(legacyGroups));
       }
@@ -761,9 +758,6 @@
             onSplitScene(scene) {
               return runSplitScene(scene, withBusyOperation, updateBusyOperation, showTab);
             },
-            onDeleteScene(scene) {
-              return runDeleteScene(scene);
-            },
           }));
         } else {
           body.innerHTML = "";
@@ -822,9 +816,6 @@
             },
             onMergeGroup(group) {
               return runMergeGroup(group, withBusyOperation, updateBusyOperation, showTab);
-            },
-            onDeleteScene(scene) {
-              return runDeleteScene(scene);
             },
           }));
         }

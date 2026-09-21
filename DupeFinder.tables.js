@@ -140,9 +140,9 @@
       return wrap;
     }
 
-    const duplicateModeField = field("Duplicate finder mode", duplicateModeSelect, "Switch between pHash-first matching with legacy fallback for scenes not already grouped, or legacy-only title/date/studio matching.");
+    const duplicateModeField = field("Duplicate finder mode", duplicateModeSelect, "Switch between pHash-first matching with a legacy fallback only for scenes without pHash, or legacy-only title/date/studio matching.");
     const phashDistanceField = field("pHash distance", distanceInput, "Preset maximum Hamming distance for pHash duplicate grouping.");
-    const legacyDistanceField = field("Legacy title distance", legacyDistanceInput, "Used in legacy mode or as the fallback pass for scenes not already grouped by pHash. 0 means strict title matching; higher values broaden title-only and same-meta title matching.");
+    const legacyDistanceField = field("Legacy title distance", legacyDistanceInput, "Used in legacy mode or as the fallback pass only for scenes without pHash. 0 means strict title matching; higher values broaden title-only and same-meta title matching.");
 
     form.appendChild(duplicateModeField);
     form.appendChild(phashDistanceField);
@@ -222,7 +222,6 @@
       onToggleSceneBatch,
       onKeepScene,
       onSplitScene,
-      onDeleteScene,
     } = opts;
 
     if (!scenes.length) return ui.el("div", "color:#5c6370;padding:20px 0;text-align:center;", "No multi-file scenes found ✓");
@@ -273,20 +272,12 @@
         tr.addEventListener("click", () => onSelectFile(scene.id, file.id));
 
         const actionsTd = ui.el("td", STYLE.td + "white-space:normal;");
-        const selectBtn = ui.mkBtn("Keep this", selected ? "#98c379" : "#56b6c2", () => onSelectFile(scene.id, file.id));
-        selectBtn.setAttribute("aria-pressed", selected ? "true" : "false");
-        selectBtn.title = selected ? "Currently selected keep file" : "Choose this file to keep";
-        actionsTd.appendChild(selectBtn);
         if (selected && !batchMode && extraFiles.length) {
           const keepBtn = ui.mkBtn(dryRun ? "👁 Preview keep" : "🧹 Keep", "#98c379", async () => onKeepScene(scene));
-          keepBtn.style.marginLeft = "6px";
           actionsTd.appendChild(keepBtn);
           const splitBtn = ui.mkBtn(dryRun ? "👁 Preview split" : "✂ Split", "#c678dd", async () => onSplitScene(scene));
           splitBtn.style.marginLeft = "6px";
           actionsTd.appendChild(splitBtn);
-          const delBtn = ui.mkBtn(dryRun ? "👁 Preview delete scene" : "🗑 Delete scene", "#e06c75", async () => onDeleteScene(scene));
-          delBtn.style.marginLeft = "6px";
-          actionsTd.appendChild(delBtn);
         }
 
         const basename = helpers.fileName(file);
@@ -327,7 +318,6 @@
       onSelectScene,
       onToggleGroupBatch,
       onMergeGroup,
-      onDeleteScene,
     } = opts;
 
     if (!groups.length) return ui.el("div", "color:#5c6370;padding:20px 0;text-align:center;", "No duplicate scenes found ✓");
@@ -377,19 +367,9 @@
         tr.addEventListener("click", () => onSelectScene(group.key, scene.id));
 
         const actionsTd = ui.el("td", STYLE.td + "white-space:normal;");
-        const keepBtn = ui.mkBtn("Keep this", isKeeper ? "#98c379" : "#56b6c2", () => onSelectScene(group.key, scene.id));
-        keepBtn.setAttribute("aria-pressed", isKeeper ? "true" : "false");
-        keepBtn.title = isKeeper ? "Currently selected keep scene" : "Choose this scene to keep";
-        actionsTd.appendChild(keepBtn);
         if (isKeeper && !batchMode) {
           const mergeBtn = ui.mkBtn(dryRun ? "👁 Preview merge" : "⚡ Merge", "#61afef", async () => onMergeGroup(group));
-          mergeBtn.style.marginLeft = "6px";
           actionsTd.appendChild(mergeBtn);
-        }
-        if (!batchMode) {
-          const delBtn = ui.mkBtn(dryRun ? "👁 Preview delete" : "🗑 Delete", "#e06c75", async () => onDeleteScene(scene));
-          delBtn.style.marginLeft = "6px";
-          actionsTd.appendChild(delBtn);
         }
 
         const sceneTd = ui.el("td", STYLE.td);
