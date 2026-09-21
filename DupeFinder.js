@@ -390,7 +390,7 @@
         mergeBtn.textContent = "Merging…"; mergeBtn.disabled = true;
         try {
           await mergeScenes(sources.map(s => s.id), keeper.id);
-          onGroupMerged(group, keeper.id);
+          onGroupMerged(group);
           toast(`Merged ${sources.length} scene(s) into #${keeper.id}`, "#61afef");
         } catch(e) {
           toast(`Merge error: ${e.message}`, "#e06c75");
@@ -519,9 +519,9 @@
       multiFileScenes = multiFileScenes.filter(scene => (scene.files || []).length > 1);
     }
 
-    function removeMergedSourcesFromState(group, keeperId) {
-      const sourceIds = new Set(group.filter(scene => scene.id !== keeperId).map(scene => scene.id));
-      multiFileScenes = multiFileScenes.filter(scene => !sourceIds.has(scene.id));
+    function removeMergedScenesFromState(group) {
+      const mergedIds = new Set(group.map(scene => scene.id));
+      multiFileScenes = multiFileScenes.filter(scene => !mergedIds.has(scene.id));
       dupGroups = dupGroups.filter(g => g !== group);
     }
 
@@ -550,8 +550,8 @@
             removeSceneFromState(sceneId);
             showTab(currentTab);
           },
-          onGroupMerged(group, keeperId) {
-            removeMergedSourcesFromState(group, keeperId);
+          onGroupMerged(group) {
+            removeMergedScenesFromState(group);
             showTab(currentTab);
           },
         }));
