@@ -19,6 +19,13 @@
     return ui.el("td", STYLE.td + (extraStyle || ""), helpers.placeholder(text));
   }
 
+  function appendLinesAsText(container, lines) {
+    lines.forEach((line, index) => {
+      if (index > 0) container.appendChild(document.createElement("br"));
+      container.appendChild(document.createTextNode(line));
+    });
+  }
+
   function renderBatchBar(config) {
     const {
       totalCount,
@@ -223,9 +230,12 @@
 
         const basename = helpers.fileName(file);
         const dir = file.path ? file.path.replace(/[/\\][^/\\]+$/, "") : "";
-        const keepMark = selected ? `<span style="${STYLE.keepBadge}">keep</span>` : "";
         const tdPath = ui.el("td", STYLE.td + "white-space:normal;");
-        tdPath.innerHTML = `<div style="color:${selected ? "#98c379" : "#abb2bf"};font-size:0.9em;">${basename}${keepMark}</div><div style="color:#5c6370;font-size:0.78em;margin-top:2px;">${helpers.placeholder(dir)}</div>`;
+        const nameWrap = ui.el("div", `color:${selected ? "#98c379" : "#abb2bf"};font-size:0.9em;`);
+        nameWrap.appendChild(document.createTextNode(basename));
+        if (selected) nameWrap.appendChild(ui.el("span", STYLE.keepBadge, "keep"));
+        const dirWrap = ui.el("div", "color:#5c6370;font-size:0.78em;margin-top:2px;", helpers.placeholder(dir));
+        tdPath.append(nameWrap, dirWrap);
 
         tr.appendChild(actionsTd);
         tr.appendChild(tdPath);
@@ -293,7 +303,7 @@
         const bestFile = analysis.pickBestFile(scene.files, settings) || {};
         const totalSize = (scene.files || []).reduce((n, f) => n + (f.size || 0), 0);
         const perfs = (scene.performers || []).map(p => p.name).join(", ") || "—";
-        const filenames = (scene.files || []).map(helpers.fileName).join("<br>") || "—";
+        const filenames = (scene.files || []).map(helpers.fileName);
 
         const tr = document.createElement("tr");
         tr.style.cssText = `background:${isKeeper ? "rgba(152,195,121,0.16)" : "transparent"};cursor:pointer;`;
@@ -325,7 +335,11 @@
         if (isKeeper) sceneTd.appendChild(ui.el("span", STYLE.keepBadge, "keep"));
 
         const filesTd = ui.el("td", STYLE.td + "color:#5c6370;font-size:0.78em;white-space:normal;");
-        filesTd.innerHTML = filenames;
+        if (!filenames.length) {
+          filesTd.textContent = "—";
+        } else {
+          appendLinesAsText(filesTd, filenames);
+        }
 
         tr.appendChild(actionsTd);
         tr.appendChild(sceneTd);
