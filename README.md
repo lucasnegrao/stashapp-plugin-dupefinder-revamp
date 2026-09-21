@@ -8,10 +8,12 @@ A [Stash](https://github.com/stashapp/stash) plugin that finds duplicate scenes 
 
 - **Duplicate detection** — finds scenes sharing the same title + date + studio combination
 - **Multi-file scene detection** — finds scenes that have more than one file attached
-- **Smart "keep" suggestion** — automatically recommends the best scene to keep based on resolution → file size → codec ranking
-- **Keep best file cleanup** — in the Multi-file tab, keep the recommended best file and delete the rest without deleting the scene
-- **Merge duplicates** — merges metadata from all scenes in a group into the best one in a single click
-- **Dry run / preview mode** — preview cleanup, delete, and merge actions before anything destructive happens
+- **Click-to-keep selection** — click any file row or duplicate-scene row to choose exactly what should be kept
+- **Consistent keep labeling** — the selected keeper is always marked **keep** so the UI reflects your choice
+- **Batch mode for both tabs** — exclude any scene/group from the batch, then apply keep or merge to everything still included
+- **Keep selected file cleanup** — in the Multi-file tab, keep the selected file and delete the rest without deleting the scene
+- **Merge duplicates into selected keep** — in the Duplicates tab, merge the rest of the group into the selected keep scene
+- **Dry run / preview mode** — preview cleanup, delete, merge, and batch actions before anything destructive happens
 - **Delete scenes** — delete individual scenes (and their files from disk) directly from the results
 - **Floating button** — accessible from anywhere in Stash via a persistent 🔍 Dupes button
 - **No Python required** — pure JavaScript, client-side only
@@ -33,23 +35,27 @@ A [Stash](https://github.com/stashapp/stash) plugin that finds duplicate scenes 
 
 1. Click **🔍 Dupes** anywhere in Stash
 2. The plugin loads all scenes from your library (progress shown while loading)
-3. Optional: enable **Dry run / preview mode** in the modal header to preview destructive actions without executing them
-4. Two tabs are shown:
+3. Optional: enable **Dry run / preview mode** in the modal header to preview destructive actions before executing them
+4. Optional: enable **Batch mode** to work through many scenes/groups at once while excluding anything you want to skip
+5. Two tabs are shown:
 
 ### Multi-file tab
-Lists every scene that has more than one file attached, sorted by file count. Shows each file's path, resolution, codec, duration, and size. The recommended file is marked **best**.
+Lists every scene that has more than one file attached, sorted by file count. Click a file row to choose which file to **keep**. The selected file is highlighted and marked **keep**.
 
 Available actions:
-- **🧹 Keep best** — keeps the recommended best file, safely makes it the scene's primary file if needed, and deletes the other files from disk
+- **🧹 Keep** — keeps the currently selected file, safely makes it the scene's primary file if needed, and deletes the other files from disk
 - **🗑 Delete scene** — deletes the whole scene and all its files
+- In **Batch mode**, exclude any scenes you want to skip, then run **Keep selected in batch** to apply the chosen keep file across all included scenes
 - In **Dry run / preview mode**, these actions show what would be kept or deleted without making changes
 
 ### Duplicates tab
-Lists groups of scenes that share the same title + date + studio. For each group:
-- The recommended scene to **keep** is highlighted (highest res → smallest size → best codec)
-- **⚡ Merge all** — merges all scenes in the group into the recommended keeper, combining metadata
+Lists groups of scenes that share the same title + date + studio. Click any scene row to choose the scene to **keep** before merging.
+
+Available actions:
+- **⚡ Merge** — merges the rest of the selected duplicate group into the currently selected keep scene, combining metadata
 - **🗑 Delete** — delete any individual scene and its files from disk
-- In **Dry run / preview mode**, merge and delete actions preview the destination keeper and source scenes instead of executing
+- In **Batch mode**, exclude any groups you want to skip, then run **Merge selected in batch** to process all included groups
+- In **Dry run / preview mode**, merge, delete, and batch actions preview the destination keeper and source scenes instead of executing
 
 ---
 
@@ -73,5 +79,5 @@ Scenes with no title and no date+studio combination are excluded from duplicate 
 ## Notes
 
 - Loading time scales with library size — large libraries (10,000+ scenes) may take a few seconds
-- Merge, delete, and keep-best cleanup actions are permanent and cannot be undone from within the plugin unless you first use **Dry run / preview mode** to inspect them
+- Keep, merge, delete, and batch actions are permanent and cannot be undone from within the plugin unless you first use **Dry run / preview mode** to inspect them
 - The floating button persists across page navigation via a MutationObserver
