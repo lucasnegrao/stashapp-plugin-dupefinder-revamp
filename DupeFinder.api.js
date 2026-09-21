@@ -45,8 +45,15 @@
       throw error;
     }
     if (!res.ok) {
-      const detail = text && text.trim();
-      throw new Error(detail ? `HTTP ${res.status}: ${detail}` : `HTTP ${res.status}`);
+      const detail = (text || "")
+        .replace(/<[^>]*>/g, " ")
+        .replace(/\s+/g, " ")
+        .trim()
+        .slice(0, 200);
+      const error = new Error(detail ? `HTTP ${res.status}: ${detail}` : `HTTP ${res.status}`);
+      error.status = res.status;
+      error.responseText = text;
+      throw error;
     }
     if (!data) throw new Error("Invalid GraphQL response");
     return data.data;
