@@ -223,6 +223,7 @@
 
     for (const scene of scenes) {
       const sceneWrap = document.createElement("div");
+      const currentPrimary = (scene.files || [])[0];
       const sorted = [...scene.files].sort(compareFiles);
       const keeper = sorted[0];
       const extraFiles = sorted.slice(1);
@@ -261,14 +262,11 @@
 
           cleanBtn.textContent = "Cleaning…"; cleanBtn.disabled = true;
           try {
-            const extraFileIds = extraFiles.map(f => f.id);
-            try {
-              await deleteFiles(extraFileIds);
-            } catch (e) {
-              if (!/cannot delete primary file/i.test(e.message || "")) throw e;
+            if (currentPrimary && keeper.id !== currentPrimary.id) {
               await setScenePrimaryFile(scene.id, keeper.id);
-              await deleteFiles(extraFileIds);
             }
+            const extraFileIds = extraFiles.map(f => f.id);
+            await deleteFiles(extraFileIds);
             scene.files = [keeper];
             onSceneCleaned(scene);
             toast(`Kept best file for scene #${scene.id}`, "#98c379");
