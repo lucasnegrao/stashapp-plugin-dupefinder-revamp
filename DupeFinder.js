@@ -174,7 +174,11 @@
     return Object.entries(groups)
       .filter(([, groupScenes]) => groupScenes.length > 1)
       .map(([key, groupScenes]) => ({ key, scenes: groupScenes }))
-      .sort((a, b) => b.scenes.length - a.scenes.length);
+      .sort((a, b) => {
+        const sizeDiff = b.scenes.length - a.scenes.length;
+        if (sizeDiff) return sizeDiff;
+        return a.key.localeCompare(b.key);
+      });
   }
 
   const CODEC_RANK = ["av1", "hevc", "h265", "vp9", "h264", "avc", "mpeg4", "mpeg2"];
