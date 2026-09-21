@@ -86,7 +86,10 @@
   function idKey(id) { return String(id); }
   function norm(str) { return (str || "").trim().toLowerCase(); }
   function normDate(str) { return (str || "").trim(); }
-  function isFiniteNumber(value) { return Number.isFinite(value); }
+  function toFiniteNumber(value) {
+    const number = Number(value);
+    return Number.isFinite(number) ? number : null;
+  }
 
   function previewAction(title, lines) {
     alert(`DRY RUN / PREVIEW — ${title}\n\n${lines.join("\n")}`);
@@ -207,8 +210,8 @@
 
   function sceneFileDurations(scene) {
     return (scene.files || [])
-      .map(file => file && file.duration)
-      .filter(isFiniteNumber);
+      .map(file => toFiniteNumber(file && file.duration))
+      .filter(duration => duration !== null);
   }
 
   function sceneDurationDiffSeconds(scene) {
@@ -594,6 +597,15 @@
     const busyTitleEl = el("div", "color:#e5c07b;font-weight:700;font-size:1em;");
     const busyProgressEl = el("div", "color:#abb2bf;font-size:0.88em;margin-top:8px;");
     const busyWarningEl = el("div", "color:#e5c07b;font-size:0.8em;margin-top:10px;line-height:1.4;");
+    busyOverlay.setAttribute("role", "dialog");
+    busyOverlay.setAttribute("aria-modal", "true");
+    busyOverlay.setAttribute("aria-labelledby", "df-busy-title");
+    busyOverlay.setAttribute("aria-describedby", "df-busy-progress df-busy-warning");
+    busyTitleEl.id = "df-busy-title";
+    busyProgressEl.id = "df-busy-progress";
+    busyProgressEl.setAttribute("aria-live", "polite");
+    busyWarningEl.id = "df-busy-warning";
+    busyWarningEl.setAttribute("aria-live", "assertive");
     const busyAbortBtn = mkBtn("Abort remaining items", "#e5c07b", () => {
       if (!operationState.abortable || operationState.abortRequested) return;
       if (!confirm(
