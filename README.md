@@ -24,7 +24,7 @@ version and its behavior from the original plugin. Its plugin ID is
 - **Automatic keep selection** — rank candidates by balanced, quality, or size-based rules
 - **Progress and abort controls** — see batch progress and stop remaining work after the current item finishes
 - **Native Stash launchers** — always available in **Settings → Tools**, with an optional header icon enabled by default
-- **Bundled help** — open **?** in the plugin header to read the documentation installed with your exact version
+- **Documentation shortcut** — open **?** in the plugin header to view the project README on GitHub
 - **No Python dependency** — all processing runs in the Stash frontend
 
 ---
@@ -91,7 +91,7 @@ plugins directory, then reload plugins.
 3. Optionally enable **PREVIEW** before testing destructive actions.
 4. Optionally enable **BATCH** to operate on multiple included scenes or groups.
 5. Choose `pHash` or `Legacy` matching in the header. In pHash mode, choose the desired distance preset.
-6. Open **⚙** for automatic selection and safety settings, or **?** for this documentation.
+6. Open **⚙** for automatic selection and safety settings, or **?** to open the project documentation on GitHub.
 
 ### Multi-file tab
 

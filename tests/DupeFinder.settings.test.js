@@ -20,12 +20,12 @@ function loadPluginCore() {
   return context.window.DupeFinder;
 }
 
-test("uses the revamp plugin identity and bundled README asset", () => {
+test("uses the revamp plugin identity and documentation URL", () => {
   const { constants } = loadPluginCore();
 
   assert.equal(constants.PLUGIN_ID, "DupeFinderRevamp");
   assert.equal(constants.PRODUCT_NAME, "DupeFinder Revamp");
-  assert.equal(constants.README_ASSET_URL, "/plugin/DupeFinderRevamp/assets/README.md");
+  assert.equal(constants.README_URL, "https://github.com/lucasnegrao/stashapp-plugin-dupefinder-revamp#readme");
 });
 
 test("maximum duration difference accepts only the combobox choices", () => {

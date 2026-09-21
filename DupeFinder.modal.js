@@ -534,7 +534,6 @@
       closeBtn.title = "Close";
       const settingsBtn = ui.mkBtn("⚙", "#56b6c2", () => {
         if (settingsOverlay && settingsOverlay.isConnected) return;
-        if (helpOverlay && helpOverlay.isConnected) helpOverlay.remove();
         settingsOverlay = tables.renderSettingsModal({
           settings: state.settings,
           async onSave(raw) {
@@ -553,14 +552,8 @@
       settingsBtn.title = "Settings";
       settingsBtn.setAttribute("aria-label", `Open ${constants.PRODUCT_NAME} settings`);
       const helpBtn = ui.mkBtn("?", "#61afef", () => {
-        if (helpOverlay && helpOverlay.isConnected) return;
-        if (settingsOverlay && settingsOverlay.isConnected) settingsOverlay.remove();
-        helpOverlay = tables.renderHelpModal({
-          onClose() {
-            if (helpOverlay && helpOverlay.parentNode) helpOverlay.remove();
-          },
-        });
-        modal.appendChild(helpOverlay);
+        const documentationWindow = window.open(constants.README_URL, "_blank", "noopener,noreferrer");
+        if (documentationWindow) documentationWindow.opener = null;
       });
       helpBtn.title = "Help and documentation";
       helpBtn.setAttribute("aria-label", `Open ${constants.PRODUCT_NAME} help`);
@@ -590,7 +583,6 @@
       body.appendChild(loadingEl);
 
       let settingsOverlay = null;
-      let helpOverlay = null;
       const busyOverlay = ui.el("div", "position:absolute;inset:0;display:none;align-items:center;justify-content:center;background:rgba(33,37,43,0.82);z-index:4;padding:20px;");
       const busyPanel = ui.el("div", "background:#2c313a;border:1px solid #3e4451;border-radius:8px;padding:18px 20px;min-width:320px;max-width:520px;box-shadow:0 8px 32px rgba(0,0,0,0.45);");
       const busyTitleEl = ui.el("div", "color:#e5c07b;font-weight:700;font-size:1em;");

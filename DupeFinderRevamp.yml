@@ -10,8 +10,6 @@ settings:
     type: BOOLEAN
 
 ui:
-  assets:
-    /: .
   javascript:
     - DupeFinder.shared.js
     - DupeFinder.api.js

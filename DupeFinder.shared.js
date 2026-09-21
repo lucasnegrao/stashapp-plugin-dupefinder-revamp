@@ -1,10 +1,6 @@
 (function () {
   "use strict";
   const root = window.DupeFinder = window.DupeFinder || {};
-  const currentScriptUrl = typeof document !== "undefined" && document.currentScript && document.currentScript.src;
-  const readmeAssetUrl = currentScriptUrl && typeof URL !== "undefined"
-    ? new URL("README.md", currentScriptUrl).href
-    : "/plugin/DupeFinderRevamp/assets/README.md";
 
   root.constants = {
     MODAL_ID: "df-modal",
@@ -12,7 +8,7 @@
     PRODUCT_NAME: "DupeFinder Revamp",
     PRODUCT_ICON: "⧉",
     REPOSITORY_URL: "https://github.com/lucasnegrao/stashapp-plugin-dupefinder-revamp",
-    README_ASSET_URL: readmeAssetUrl,
+    README_URL: "https://github.com/lucasnegrao/stashapp-plugin-dupefinder-revamp#readme",
     SHOW_HEADER_BUTTON_SETTING: "showHeaderButton",
     SETTINGS_KEY: "df-settings-v2",
     CODEC_RANK: ["av1", "hevc", "h265", "vp9", "h264", "avc", "mpeg4", "mpeg2"],
