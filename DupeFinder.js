@@ -596,7 +596,10 @@
     const busyWarningEl = el("div", "color:#e5c07b;font-size:0.8em;margin-top:10px;line-height:1.4;");
     const busyAbortBtn = mkBtn("Abort remaining items", "#e5c07b", () => {
       if (!operationState.abortable || operationState.abortRequested) return;
-      if (!confirm("Abort the remaining batch items?\n\nAlready completed keep or merge actions will NOT be undone.")) return;
+      if (!confirm(
+        "Abort the remaining batch items after the current item finishes?\n\n" +
+        "Already completed keep or merge actions will NOT be undone."
+      )) return;
       operationState.abortRequested = true;
       renderBusyState();
     });
@@ -618,7 +621,9 @@
         ? `${Math.min(operationState.completed, operationState.total)} / ${operationState.total} completed`
         : "Please wait…";
       busyProgressEl.textContent = operationState.detail ? `${progressText} — ${operationState.detail}` : progressText;
-      busyWarningEl.textContent = operationState.warning || "";
+      busyWarningEl.textContent = operationState.abortRequested
+        ? `Abort requested. The current item will finish first, then the batch will stop. ${operationState.warning || ""}`.trim()
+        : (operationState.warning || "");
       busyWarningEl.style.display = operationState.warning ? "block" : "none";
       busyAbortBtn.style.display = operationState.abortable ? "inline-block" : "none";
       busyAbortBtn.disabled = operationState.abortRequested;
@@ -670,8 +675,9 @@
 
     function isSceneBatchIncluded(scene) {
       const sceneKey = idKey(scene.id);
+      if (multiBatchExcluded.has(sceneKey)) return false;
       if (hasLargeDurationMismatch(scene)) return multiBatchForcedIncluded.has(sceneKey);
-      return !multiBatchExcluded.has(sceneKey);
+      return true;
     }
 
     function isGroupIncluded(group) {
@@ -890,7 +896,7 @@
           label: "Running batch keep…",
           total: plans.length,
           abortable: true,
-          warning: "Aborting only stops the remaining scenes. Files already deleted from completed scenes are not restored.",
+          warning: "Aborting only stops after the current scene finishes. Files already deleted from completed scenes are not restored.",
         }, async () => {
           for (const plan of plans) {
             if (operationState.abortRequested) break;
@@ -964,7 +970,7 @@
           label: "Running batch merge…",
           total: previewPlans.length,
           abortable: true,
-          warning: "Aborting only stops the remaining groups. Merges already completed before the abort are not undone.",
+          warning: "Aborting only stops after the current group finishes. Merges already completed before the abort are not undone.",
         }, async () => {
           for (const groupKey of includedGroupKeys) {
             if (operationState.abortRequested) break;
@@ -1074,6 +1080,7 @@
             const included = isSceneBatchIncluded(scene);
             if (hasDurationMismatch) {
               if (included) {
+                multiBatchExcluded.add(key);
                 multiBatchForcedIncluded.delete(key);
               } else {
                 const durationDiffSeconds = Math.round(sceneDurationDiffSeconds(scene));
@@ -1082,6 +1089,7 @@
                   `Add it to the batch anyway?\n\n` +
                   `Batch keep will still delete the non-selected files if you continue.`
                 )) return;
+                multiBatchExcluded.delete(key);
                 multiBatchForcedIncluded.add(key);
               }
             } else if (multiBatchExcluded.has(key)) {
