@@ -63,6 +63,49 @@
     return bar;
   }
 
+  function renderHelpModal({ onClose }) {
+    const overlay = ui.el("div", "position:absolute;inset:0;background:rgba(0,0,0,0.62);display:flex;align-items:center;justify-content:center;z-index:6;padding:20px;");
+    const panel = ui.el("div", "width:620px;max-width:94%;background:#2c313a;border:1px solid #3e4451;border-radius:8px;padding:16px;box-shadow:0 8px 32px rgba(0,0,0,0.5);");
+    panel.setAttribute("role", "dialog");
+    panel.setAttribute("aria-modal", "true");
+    panel.setAttribute("aria-labelledby", "df-help-title");
+
+    const header = ui.el("div", "display:flex;align-items:center;gap:10px;margin-bottom:12px;");
+    const title = ui.el("div", "color:#e5c07b;font-weight:700;font-size:1em;", `${constants.PRODUCT_ICON} ${constants.PRODUCT_NAME}`);
+    title.id = "df-help-title";
+    const closeBtn = ui.mkBtn("✕", "#3e4451", onClose);
+    closeBtn.title = "Close help";
+    closeBtn.setAttribute("aria-label", "Close help");
+    closeBtn.style.cssText += "margin-left:auto;width:34px;height:34px;padding:0;display:inline-flex;align-items:center;justify-content:center;";
+    header.append(title, closeBtn);
+
+    panel.appendChild(header);
+    panel.appendChild(ui.el("p", STYLE.hintText + "font-size:0.88em;line-height:1.5;margin:0 0 10px;", "Find duplicate scenes and clean up multi-file scenes directly in Stash."));
+
+    const tips = ui.el("ul", "color:#abb2bf;font-size:0.84em;line-height:1.5;margin:0 0 14px;padding-left:22px;");
+    [
+      "Use PREVIEW to inspect destructive actions before changing your library.",
+      "Select a file or scene row to choose what should be kept.",
+      "Use BATCH to process multiple included scenes or duplicate groups.",
+      "Keep and Merge can permanently delete files; back up your Stash database before large cleanups.",
+    ].forEach(text => tips.appendChild(ui.el("li", "margin-bottom:5px;", text)));
+    panel.appendChild(tips);
+
+    const actions = ui.el("div", "display:flex;align-items:center;justify-content:flex-end;gap:8px;");
+    const docsLink = document.createElement("a");
+    docsLink.href = constants.README_URL;
+    docsLink.target = "_blank";
+    docsLink.rel = "noopener noreferrer";
+    docsLink.textContent = "Open full documentation ↗";
+    docsLink.style.cssText = "background:#61afef;border-radius:4px;color:#21252b;padding:7px 12px;font-size:0.82em;font-weight:600;text-decoration:none;";
+    actions.appendChild(docsLink);
+    panel.appendChild(actions);
+
+    overlay.appendChild(panel);
+    overlay.addEventListener("click", event => { if (event.target === overlay) onClose(); });
+    return overlay;
+  }
+
   function renderSettingsModal({ settings, onSave, onReset, onClose }) {
     const overlay = ui.el("div", "position:absolute;inset:0;background:rgba(0,0,0,0.55);display:flex;align-items:center;justify-content:center;z-index:6;");
     const panel = ui.el("div", "width:560px;max-width:92%;background:#2c313a;border:1px solid #3e4451;border-radius:8px;padding:14px;");
@@ -390,6 +433,7 @@
 
   root.tables = {
     renderBatchBar,
+    renderHelpModal,
     renderSettingsModal,
     renderMultiFileTable,
     renderDuplicatesTable,
