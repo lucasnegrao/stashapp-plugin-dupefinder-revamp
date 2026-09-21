@@ -16,7 +16,7 @@ A [Stash](https://github.com/stashapp/stash) plugin that finds duplicate scenes 
 - **Stable table layout** — fixed-width columns on both tabs with Actions first, plus pHash on both tables and Duration in duplicates
 - **Keep selected file cleanup** — in the Multi-file tab, keep the selected file and delete the rest without deleting the scene
 - **Split multi-file scenes** — unmerge a scene by keeping the selected file on the original scene and moving each other file into its own new scene
-- **Merge duplicates into selected keep** — in the Duplicates tab, merge the rest of the group into the selected keep scene
+- **Merge duplicates into selected keep** — in the Duplicates tab, combine metadata into the selected keep scene and delete every non-keeper scene and its files
 - **Dry run / preview mode** — preview cleanup, merge, and batch actions before anything destructive happens
 - **Batch progress + abort** — batch runs lock the modal, show progress, and can abort the remaining items without undoing completed actions
 - **Floating button** — accessible from anywhere in Stash via a persistent 🔍 Dupes button
@@ -58,11 +58,11 @@ Available actions:
 Lists groups of scenes using the selected duplicate finder mode. In **pHash** mode, scenes match by pHash distance first and only scenes without pHash then go through the legacy title/date/studio matcher. In **Legacy** mode, all duplicate matching uses the legacy matcher. Click any scene row to choose the scene to **keep** before merging.
 
 Available actions:
-- **⚡ Merge** — merges the rest of the selected duplicate group into the currently selected keep scene, combining metadata
+- **⚡ Merge** — combines metadata into the currently selected keep scene, then deletes every non-keeper scene and its files from disk; the keep scene's existing files are preserved
 - In **Batch mode**, exclude any groups you want to skip, then run **Merge selected in batch** to process all included groups
 - Unsafe groups (large duration differences) can start excluded in batch mode and require explicit confirmation before inclusion
 - While a batch is running, the modal shows progress, disables other interactions, and lets you abort the remaining items only
-- In **Dry run / preview mode**, merge and batch actions preview the destination keeper and source scenes instead of executing
+- In **Dry run / preview mode**, merge and batch actions preview the destination keeper plus every source scene and file that would be removed
 
 ---
 

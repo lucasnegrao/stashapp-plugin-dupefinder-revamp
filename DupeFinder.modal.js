@@ -1,7 +1,7 @@
 (function () {
   "use strict";
   const root = window.DupeFinder = window.DupeFinder || {};
-  const { api, analysis, tables, settings: settingsStore, defaults, ui, helpers, constants } = root;
+  const { api, actions, analysis, tables, settings: settingsStore, defaults, ui, helpers, constants } = root;
   const STYLE = defaults.style;
 
   function createController() {
@@ -233,8 +233,7 @@
     }
 
     async function executeMergeGroup(group, keeper, sources) {
-      await api.mergeScenes(sources.map(scene => scene.id), keeper.id);
-      const mergedKeeper = await api.fetchScene(keeper.id);
+      const mergedKeeper = await actions.mergeDuplicateGroup(api, keeper, sources);
       refreshMergedGroupState(group, mergedKeeper);
     }
 
@@ -369,6 +368,7 @@
       const sources = keeper
         ? group.scenes.filter(scene => helpers.idKey(scene.id) !== helpers.idKey(keeper.id))
         : [];
+      const sourceFiles = sources.flatMap(scene => scene.files || []);
       const keepTitle = helpers.sceneName(keeper);
       if (!sources.length) {
         ui.toast(`Nothing left to merge for ${keepTitle}`, "#56b6c2");
@@ -381,13 +381,17 @@
           "",
           `Would merge ${sources.length} source scene(s):`,
           ...sources.map(scene => `- ${scene.title ? `#${scene.id} ${helpers.sceneName(scene)}` : helpers.sceneName(scene)}`),
+          "",
+          `Would delete ${sourceFiles.length} source file(s) from disk:`,
+          ...sourceFiles.map(file => `- ${helpers.filePathLabel(file)}`),
         ]);
         return;
       }
 
       if (!confirm(
         `Merge ${sources.length} scene(s) into the selected keep scene "${keepTitle}"?\n\n` +
-        `Source scenes will be removed after merge. Metadata will be combined.`
+        `Metadata will be combined, then ${sourceFiles.length} file(s) from the source scenes will be deleted from disk. ` +
+        `Only the selected keep scene and its existing file(s) will remain.`
       )) return;
 
       try {
@@ -647,6 +651,9 @@
             lines.push(`Keep: #${plan.keeper.id} ${helpers.sceneName(plan.keeper)}`);
             lines.push(`Merge ${plan.sources.length} source scene(s):`);
             plan.sources.forEach(scene => lines.push(`- #${scene.id} ${helpers.sceneName(scene)}`));
+            const sourceFiles = plan.sources.flatMap(scene => scene.files || []);
+            lines.push(`Delete ${sourceFiles.length} source file(s) from disk:`);
+            sourceFiles.forEach(file => lines.push(`- ${helpers.filePathLabel(file)}`));
             lines.push("");
           });
           ui.previewAction(`Batch merge for ${previewPlans.length} duplicate group(s)`, lines);
@@ -654,7 +661,11 @@
         }
 
         const totalSources = previewPlans.reduce((count, plan) => count + plan.sources.length, 0);
-        if (!confirm(`Merge ${previewPlans.length} duplicate group(s) into their selected keep scenes?\n\n${totalSources} source scene(s) will be removed after merge and metadata will be combined.`)) return;
+        const totalSourceFiles = previewPlans.reduce(
+          (count, plan) => count + plan.sources.reduce((fileCount, scene) => fileCount + (scene.files || []).length, 0),
+          0
+        );
+        if (!confirm(`Merge ${previewPlans.length} duplicate group(s) into their selected keep scenes?\n\nMetadata will be combined, then ${totalSources} source scene(s) and ${totalSourceFiles} source file(s) will be permanently removed. Only each selected keep scene and its existing files will remain.`)) return;
 
         try {
           let merged = 0;
@@ -663,7 +674,7 @@
             label: "Running batch merge…",
             total: previewPlans.length,
             abortable: true,
-            warning: "Aborting only stops after the current group finishes. Merges already completed before the abort are not undone.",
+            warning: "Aborting only stops after the current group finishes. Merges and source-file deletions already completed before the abort are not undone.",
           }, async () => {
             for (const groupKey of includedGroupKeys) {
               if (state.operation.abortRequested) break;

@@ -7,6 +7,7 @@ ui:
   javascript:
     - DupeFinder.shared.js
     - DupeFinder.api.js
+    - DupeFinder.actions.js
     - DupeFinder.analysis.js
     - DupeFinder.tables.js
     - DupeFinder.modal.js
