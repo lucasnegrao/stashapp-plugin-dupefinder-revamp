@@ -343,7 +343,7 @@
         tr.addEventListener("click", () => onSelectFile(scene.id, f.id));
 
         const basename = fileName(f);
-        const dir = f.path.replace(/[/\\][^/\\]+$/, "");
+        const dir = f.path ? f.path.replace(/[/\\][^/\\]+$/, "") : "";
         const keepMark = selected ? `<span style="${STYLE.keepBadge}">keep</span>` : "";
         tr.innerHTML = `
           <td style="${STYLE.td}">
@@ -631,9 +631,23 @@
       refreshDerivedState();
     }
 
+    async function executeKeepScene(scene, keeper, extraFiles) {
+      const currentPrimary = (scene.files || [])[0];
+      if (currentPrimary && idKey(keeper.id) !== idKey(currentPrimary.id)) {
+        await setScenePrimaryFile(scene.id, keeper.id);
+      }
+      await deleteFiles(extraFiles.map(file => file.id));
+      refreshCleanedSceneState(scene.id, keeper.id);
+    }
+
+    async function executeMergeGroup(group, keeper, sources) {
+      await mergeScenes(sources.map(scene => scene.id), keeper.id);
+      const mergedKeeper = await fetchScene(keeper.id);
+      refreshMergedGroupState(group, mergedKeeper);
+    }
+
     async function runKeepScene(scene) {
       const keeper = getSelectedMultiFile(scene);
-      const currentPrimary = (scene.files || [])[0];
       const extraFiles = (scene.files || []).filter(file => idKey(file.id) !== idKey(keeper.id));
       if (!keeper || !extraFiles.length) {
         toast(`Scene #${scene.id} already only has the selected keep file`, "#56b6c2");
@@ -657,11 +671,7 @@
       )) return;
 
       try {
-        if (currentPrimary && idKey(keeper.id) !== idKey(currentPrimary.id)) {
-          await setScenePrimaryFile(scene.id, keeper.id);
-        }
-        await deleteFiles(extraFiles.map(file => file.id));
-        refreshCleanedSceneState(scene.id, keeper.id);
+        await executeKeepScene(scene, keeper, extraFiles);
         showTab(currentTab);
         toast(`Kept selected file for scene #${scene.id}`, "#98c379");
       } catch (e) {
@@ -694,9 +704,7 @@
       )) return;
 
       try {
-        await mergeScenes(sources.map(scene => scene.id), keeper.id);
-        const mergedKeeper = await fetchScene(keeper.id);
-        refreshMergedGroupState(group, mergedKeeper);
+        await executeMergeGroup(group, keeper, sources);
         showTab(currentTab);
         toast(`Merged ${sources.length} scene(s) into #${keeper.id}`, "#61afef");
       } catch (e) {
@@ -743,12 +751,7 @@
 
       try {
         for (const plan of plans) {
-          const currentPrimary = (plan.scene.files || [])[0];
-          if (currentPrimary && idKey(plan.keeper.id) !== idKey(currentPrimary.id)) {
-            await setScenePrimaryFile(plan.scene.id, plan.keeper.id);
-          }
-          await deleteFiles(plan.extraFiles.map(file => file.id));
-          refreshCleanedSceneState(plan.scene.id, plan.keeper.id);
+          await executeKeepScene(plan.scene, plan.keeper, plan.extraFiles);
         }
         showTab(currentTab);
         toast(`Kept selected files for ${plans.length} scene(s)`, "#98c379");
@@ -796,9 +799,7 @@
 
       try {
         for (const plan of plans) {
-          await mergeScenes(plan.sources.map(scene => scene.id), plan.keeper.id);
-          const mergedKeeper = await fetchScene(plan.keeper.id);
-          refreshMergedGroupState(plan.group, mergedKeeper);
+          await executeMergeGroup(plan.group, plan.keeper, plan.sources);
         }
         showTab(currentTab);
         toast(`Merged ${plans.length} duplicate group(s)`, "#61afef");
