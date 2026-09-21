@@ -823,7 +823,7 @@
     }
 
     function renderBatchBar(config) {
-      const { totalCount, includedCount, itemLabel, actionLabel, actionColor, onRun } = config;
+      const { totalCount, includedCount, itemLabel, actionLabel, actionColor, onRun, isDisabled = () => includedCount === 0 } = config;
       const bar = el("div", STYLE.batchBar);
       const summary = includedCount
         ? `${includedCount} of ${totalCount} ${itemLabel} in the batch`
@@ -841,11 +841,11 @@
         } finally {
           if (document.body.contains(runBtn)) {
             runBtn.textContent = originalLabel;
-            runBtn.disabled = includedCount === 0;
+            runBtn.disabled = isDisabled();
           }
         }
       });
-      if (includedCount === 0) runBtn.disabled = true;
+      if (isDisabled()) runBtn.disabled = true;
       bar.appendChild(runBtn);
       return bar;
     }
@@ -868,6 +868,7 @@
             actionLabel: dryRun ? "👁 Preview batch keep" : "🧹 Keep selected in batch",
             actionColor: "#98c379",
             onRun: runMultiBatch,
+            isDisabled: () => multiFileScenes.filter(scene => isSceneIncluded(scene)).length === 0,
           }));
         }
 
@@ -902,6 +903,7 @@
             actionLabel: dryRun ? "👁 Preview batch merge" : "⚡ Merge selected in batch",
             actionColor: "#61afef",
             onRun: runDuplicateBatch,
+            isDisabled: () => dupGroups.filter(group => isGroupIncluded(group)).length === 0,
           }));
         }
 
