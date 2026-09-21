@@ -11,7 +11,9 @@ A [Stash](https://github.com/stashapp/stash) plugin that finds duplicate scenes 
 - **Click-to-keep selection** — click any file row or duplicate-scene row to choose exactly what should be kept
 - **Consistent keep labeling** — the selected keeper is always marked **keep** so the UI reflects your choice
 - **Batch mode for both tabs** — exclude any scene/group from the batch, then apply keep or merge to everything still included
-- **Safer batch keep defaults** — multi-file scenes with file durations differing by more than 10 seconds start excluded from batch keep until you explicitly confirm them
+- **Safer batch defaults** — multi-file scenes and duplicate groups with large duration diffs start excluded from batch mode until you explicitly confirm them
+- **Settings modal** — configure duplicate distance, best-selection algorithm, batch safety threshold, and additional behavior toggles
+- **Stable table layout** — fixed-width columns on both tabs with Actions first, plus pHash on both tables and Duration in duplicates
 - **Keep selected file cleanup** — in the Multi-file tab, keep the selected file and delete the rest without deleting the scene
 - **Merge duplicates into selected keep** — in the Duplicates tab, merge the rest of the group into the selected keep scene
 - **Dry run / preview mode** — preview cleanup, delete, merge, and batch actions before anything destructive happens
@@ -39,7 +41,8 @@ A [Stash](https://github.com/stashapp/stash) plugin that finds duplicate scenes 
 2. The plugin loads all scenes from your library (progress shown while loading)
 3. Optional: enable **Dry run / preview mode** in the modal header to preview destructive actions before executing them
 4. Optional: enable **Batch mode** to work through many scenes/groups at once while excluding anything you want to skip
-5. Two tabs are shown:
+5. Optional: open **⚙ Settings** in the modal header to tune grouping/ranking behavior and safety defaults
+6. Two tabs are shown:
 
 ### Multi-file tab
 Lists every scene that has more than one file attached, sorted by file count. Click a file row to choose which file to **keep**. The selected file is highlighted and marked **keep**.
@@ -48,7 +51,7 @@ Available actions:
 - **🧹 Keep** — keeps the currently selected file, safely makes it the scene's primary file if needed, and deletes the other files from disk
 - **🗑 Delete scene** — deletes the whole scene and all its files
 - In **Batch mode**, exclude any scenes you want to skip, then run **Keep selected in batch** to apply the chosen keep file across all included scenes
-- Scenes whose file durations differ by more than 10 seconds start **Excluded** in batch mode and ask for confirmation before being re-added
+- Scenes whose file durations differ by more than the configured safety threshold start **Excluded** in batch mode and ask for confirmation before being re-added
 - In **Dry run / preview mode**, these actions show what would be kept or deleted without making changes
 
 ### Duplicates tab
@@ -58,6 +61,7 @@ Available actions:
 - **⚡ Merge** — merges the rest of the selected duplicate group into the currently selected keep scene, combining metadata
 - **🗑 Delete** — delete any individual scene and its files from disk
 - In **Batch mode**, exclude any groups you want to skip, then run **Merge selected in batch** to process all included groups
+- Unsafe groups (large duration differences) can start excluded in batch mode and require explicit confirmation before inclusion
 - While a batch is running, the modal shows progress, disables other interactions, and lets you abort the remaining items only
 - In **Dry run / preview mode**, merge, delete, and batch actions preview the destination keeper and source scenes instead of executing
 
@@ -69,6 +73,10 @@ Two scenes are considered duplicates if they have the same:
 - Title (case-insensitive)
 - Date
 - Studio
+
+The title comparison can be tuned in **⚙ Settings** using a default Levenshtein distance:
+- `0` keeps strict exact-title matching
+- Higher values allow slightly different titles to cluster together
 
 Scenes with no title and no date+studio combination are excluded from duplicate detection.
 
