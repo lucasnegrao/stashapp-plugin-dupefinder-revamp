@@ -281,7 +281,17 @@
   }
 
   function hasUnsafeDuplicateGroup(group, settings) {
-    return groupDurationDiffSeconds(group, settings) > settings.batchDurationDiffSeconds;
+    const hasLargeDiff = groupDurationDiffSeconds(group, settings) > settings.batchDurationDiffSeconds;
+    if (!hasLargeDiff) return false;
+    if (settings.duplicateFinderMode === "legacy") return true;
+    if (group.method === "legacy") return true;
+    if (group.method !== "phash") return false;
+    const phashes = group.scenes
+      .map(scene => phashForScene(scene, settings))
+      .filter(Boolean);
+    if (phashes.length < 2) return false;
+    const first = phashes[0];
+    return phashes.every(phash => phash === first);
   }
 
   root.analysis = {
