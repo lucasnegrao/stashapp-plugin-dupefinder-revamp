@@ -250,7 +250,7 @@
         tr.title = "Click to keep this file";
         tr.addEventListener("click", () => onSelectFile(scene.id, file.id));
 
-        const actionsTd = ui.el("td", STYLE.td + "white-space:normal;");
+        const actionsTd = ui.el("td", STYLE.td + "white-space:nowrap;");
         if (selected) actionsTd.appendChild(ui.el("span", STYLE.keepBadge, "keep"));
 
         const basename = helpers.fileName(file);
@@ -343,7 +343,7 @@
         tr.title = "Click to keep this scene";
         tr.addEventListener("click", () => onSelectScene(group.key, scene.id));
 
-        const actionsTd = ui.el("td", STYLE.td + "white-space:normal;");
+        const actionsTd = ui.el("td", STYLE.td + "white-space:nowrap;");
         if (isKeeper) actionsTd.appendChild(ui.el("span", STYLE.keepBadge, "keep"));
 
         const sceneTd = ui.el("td", STYLE.td);

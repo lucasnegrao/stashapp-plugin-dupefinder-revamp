@@ -41,8 +41,8 @@ A [Stash](https://github.com/stashapp/stash) plugin that finds duplicate scenes 
 
 1. Open **DupeFinder** from **Settings → Tools**, or click its search icon in the Stash header
 2. The plugin loads all scenes from your library (progress shown while loading)
-3. Optional: enable **Dry run / preview mode** in the modal header to preview destructive actions before executing them
-4. Optional: enable **Batch mode** to work through many scenes/groups at once while excluding anything you want to skip
+3. Optional: press **PREVIEW** in the modal header to preview destructive actions before executing them
+4. Optional: press **BATCH** to work through many scenes/groups at once while excluding anything you want to skip
 5. Choose duplicate mode and, in pHash mode, pHash distance directly from the modal header; changes refresh the results automatically
 6. Optional: open **⚙** to tune ranking, legacy fallback, and batch safety behavior
 7. Two tabs are shown:

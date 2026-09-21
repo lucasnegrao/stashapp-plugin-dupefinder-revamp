@@ -53,7 +53,7 @@
     },
     columns: {
       multi: [
-        { key: "actions", label: "", width: "220px" },
+        { key: "actions", label: "", width: "62px" },
         { key: "path", label: "Path", width: "38%" },
         { key: "res", label: "Res", width: "75px" },
         { key: "codec", label: "Codec", width: "100px" },
@@ -62,7 +62,7 @@
         { key: "size", label: "Size", width: "95px" },
       ],
       dupes: [
-        { key: "actions", label: "", width: "220px" },
+        { key: "actions", label: "", width: "62px" },
         { key: "scene", label: "Scene", width: "130px" },
         { key: "files", label: "Files", width: "22%" },
         { key: "res", label: "Res", width: "70px" },

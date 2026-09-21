@@ -518,6 +518,9 @@
       });
       settingsBtn.title = "Settings";
       settingsBtn.setAttribute("aria-label", "Open DupeFinder settings");
+      settingsBtn.style.fontSize = "1.35em";
+      settingsBtn.style.lineHeight = "1";
+      settingsBtn.style.padding = "5px 11px";
       modal.appendChild(header);
       header.appendChild(titleEl);
 
@@ -892,31 +895,46 @@
         }
       }
 
-      const dryRunLabel = ui.el("label", "display:flex;align-items:center;gap:6px;color:#abb2bf;font-size:0.85em;cursor:pointer;");
-      const dryRunBox = document.createElement("input");
-      dryRunBox.type = "checkbox";
-      dryRunBox.addEventListener("change", () => {
-        state.dryRun = dryRunBox.checked;
+      function headerToggleButton(label, activeColor, getValue, setValue) {
+        const btn = ui.mkBtn(label, "#2c313a", () => {
+          setValue(!getValue());
+          sync();
+        });
+        btn.style.border = "1px solid #5c6370";
+        btn.style.fontWeight = "700";
+        btn.style.letterSpacing = "0.04em";
+        btn.style.padding = "6px 10px";
+
+        function sync() {
+          const active = getValue();
+          btn.setAttribute("aria-pressed", active ? "true" : "false");
+          btn.style.background = active ? activeColor : "#2c313a";
+          btn.style.borderColor = active ? activeColor : "#5c6370";
+          btn.style.color = active ? "#21252b" : "#abb2bf";
+          btn.style.boxShadow = active ? "inset 0 2px 4px rgba(0,0,0,0.35)" : "none";
+        }
+
+        sync();
+        return btn;
+      }
+
+      const previewBtn = headerToggleButton("PREVIEW", "#e5c07b", () => state.dryRun, enabled => {
+        state.dryRun = enabled;
         if (state.loaded) showTab(state.currentTab);
       });
-      dryRunLabel.appendChild(dryRunBox);
-      dryRunLabel.appendChild(document.createTextNode("Dry run / preview mode"));
+      previewBtn.title = "Preview actions without making changes";
 
-      const batchModeLabel = ui.el("label", "display:flex;align-items:center;gap:6px;color:#abb2bf;font-size:0.85em;cursor:pointer;");
-      const batchModeBox = document.createElement("input");
-      batchModeBox.type = "checkbox";
-      batchModeBox.addEventListener("change", () => {
-        state.batchMode = batchModeBox.checked;
+      const batchBtn = headerToggleButton("BATCH", "#61afef", () => state.batchMode, enabled => {
+        state.batchMode = enabled;
         updateTitle();
         if (state.loaded) showTab(state.currentTab);
       });
-      batchModeLabel.appendChild(batchModeBox);
-      batchModeLabel.appendChild(document.createTextNode("Batch mode"));
+      batchBtn.title = "Apply actions to multiple included items";
 
       controls.appendChild(duplicateModeControl);
       controls.appendChild(phashDistanceControl);
-      controls.appendChild(dryRunLabel);
-      controls.appendChild(batchModeLabel);
+      controls.appendChild(previewBtn);
+      controls.appendChild(batchBtn);
       controls.appendChild(settingsBtn);
       controls.appendChild(closeBtn);
       header.appendChild(controls);
