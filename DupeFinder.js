@@ -85,6 +85,7 @@
   function sceneName(scene) { return scene.title || `#${scene.id}`; }
   function idKey(id) { return String(id); }
   function norm(str) { return (str || "").trim().toLowerCase(); }
+  function normDate(str) { return (str || "").trim(); }
 
   function previewAction(title, lines) {
     alert(`DRY RUN / PREVIEW — ${title}\n\n${lines.join("\n")}`);
@@ -106,7 +107,7 @@
   function duplicateGroupKey(scene) {
     return JSON.stringify([
       norm(scene.title),
-      (scene.date || "").trim(),
+      normDate(scene.date),
       norm(scene.studio ? scene.studio.name : ""),
     ]);
   }
@@ -163,7 +164,7 @@
     const groups = {};
     for (const scene of scenes) {
       const title = norm(scene.title);
-      const date = (scene.date || "").trim();
+      const date = normDate(scene.date);
       const studio = norm(scene.studio ? scene.studio.name : "");
       if (!title && !(date && studio)) continue;
       const key = duplicateGroupKey(scene);
@@ -762,8 +763,13 @@
     }
 
     async function runDuplicateBatch() {
-      const plans = dupGroups
+      const includedGroupKeys = dupGroups
         .filter(group => isGroupIncluded(group))
+        .map(group => group.key);
+
+      const previewPlans = includedGroupKeys
+        .map(groupKey => dupGroups.find(group => group.key === groupKey))
+        .filter(Boolean)
         .map(group => {
           const keeper = getSelectedDuplicateScene(group);
           return {
@@ -774,35 +780,42 @@
         })
         .filter(plan => plan.keeper && plan.sources.length);
 
-      if (!plans.length) {
+      if (!previewPlans.length) {
         toast("No duplicate groups are currently included in the batch", "#56b6c2");
         return;
       }
 
       if (dryRun) {
         const lines = [];
-        plans.forEach(plan => {
+        previewPlans.forEach(plan => {
           lines.push(`Keep: #${plan.keeper.id} ${sceneName(plan.keeper)}`);
           lines.push(`Merge ${plan.sources.length} source scene(s):`);
           plan.sources.forEach(scene => lines.push(`- #${scene.id} ${sceneName(scene)}`));
           lines.push("");
         });
-        previewAction(`Batch merge for ${plans.length} duplicate group(s)`, lines);
+        previewAction(`Batch merge for ${previewPlans.length} duplicate group(s)`, lines);
         return;
       }
 
-      const totalSources = plans.reduce((count, plan) => count + plan.sources.length, 0);
+      const totalSources = previewPlans.reduce((count, plan) => count + plan.sources.length, 0);
       if (!confirm(
-        `Merge ${plans.length} duplicate group(s) into their selected keep scenes?\n\n` +
+        `Merge ${previewPlans.length} duplicate group(s) into their selected keep scenes?\n\n` +
         `${totalSources} source scene(s) will be removed after merge and metadata will be combined.`
       )) return;
 
       try {
-        for (const plan of plans) {
-          await executeMergeGroup(plan.group, plan.keeper, plan.sources);
+        let mergedCount = 0;
+        for (const groupKey of includedGroupKeys) {
+          const currentGroup = dupGroups.find(group => group.key === groupKey);
+          if (!currentGroup) continue;
+          const keeper = getSelectedDuplicateScene(currentGroup);
+          const sources = currentGroup.scenes.filter(scene => idKey(scene.id) !== idKey(keeper.id));
+          if (!keeper || !sources.length) continue;
+          await executeMergeGroup(currentGroup, keeper, sources);
+          mergedCount++;
         }
         showTab(currentTab);
-        toast(`Merged ${plans.length} duplicate group(s)`, "#61afef");
+        toast(`Merged ${mergedCount} duplicate group(s)`, "#61afef");
       } catch (e) {
         showTab(currentTab);
         toast(`Batch merge error: ${e.message}`, "#e06c75");
