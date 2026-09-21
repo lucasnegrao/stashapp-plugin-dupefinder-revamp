@@ -55,8 +55,9 @@
       error.responseText = text;
       throw error;
     }
-    if (!data) throw new Error("Invalid GraphQL response");
-    return data.data;
+    if (!text.trim()) return null;
+    if (!data || typeof data !== "object") throw new Error("Invalid GraphQL response");
+    return Object.prototype.hasOwnProperty.call(data, "data") ? data.data : null;
   }
 
   function sceneFragment(includeFingerprints, includeExtendedFields) {
