@@ -36,6 +36,22 @@
     `, { source: sourceIds.map(String), destination: String(destinationId) });
   }
 
+  async function deleteFiles(fileIds) {
+    return gql(`
+      mutation DeleteFiles($ids: [ID!]!) {
+        deleteFiles(ids: $ids)
+      }
+    `, { ids: fileIds.map(String) });
+  }
+
+  async function setScenePrimaryFile(sceneId, fileId) {
+    return gql(`
+      mutation SceneSetPrimaryFile($input: SceneUpdateInput!) {
+        sceneUpdate(input: $input) { id }
+      }
+    `, { input: { id: String(sceneId), primary_file_id: String(fileId) } });
+  }
+
   // ── Helpers ────────────────────────────────────────────────────────────────
 
   function el(tag, css, text) {
@@ -61,6 +77,13 @@
   }
 
   function sceneUrl(id) { return `/scenes/${id}`; }
+  function fileName(file) { return file.basename || file.path.split(/[/\\]/).pop(); }
+  function sceneName(scene) { return scene.title || `#${scene.id}`; }
+  function idKey(id) { return String(id); }
+
+  function previewAction(title, lines) {
+    alert(`DRY RUN / PREVIEW — ${title}\n\n${lines.join("\n")}`);
+  }
 
   function toast(msg, color) {
     const t = el("div",
@@ -102,6 +125,15 @@
     return all;
   }
 
+  async function fetchScene(id) {
+    const d = await gql(`
+      query FindScene($id: ID!) {
+        findScene(id: $id) { ${SCENE_FRAGMENT} }
+      }
+    `, { id: String(id) });
+    return d.findScene;
+  }
+
   // ── Analysis ───────────────────────────────────────────────────────────────
 
   function findMultiFileScenes(scenes) {
@@ -128,10 +160,25 @@
 
   // Preferred codecs — lower index = better
   const CODEC_RANK = ["av1", "hevc", "h265", "vp9", "h264", "avc", "mpeg4", "mpeg2"];
-  function codecScore(scene) {
-    const codec = ((scene.files || [])[0] || {}).video_codec || "";
+  function codecScore(sceneOrFile) {
+    const file = sceneOrFile && sceneOrFile.video_codec !== undefined
+      ? sceneOrFile
+      : ((((sceneOrFile || {}).files) || [])[0] || {});
+    const codec = file.video_codec || "";
     const idx = CODEC_RANK.indexOf(codec.toLowerCase());
     return idx === -1 ? CODEC_RANK.length : idx; // lower = better
+  }
+
+  function compareFiles(a, b) {
+    const resDiff = (b.height || 0) - (a.height || 0);
+    if (resDiff) return resDiff;
+    const sizeDiff = (a.size || 0) - (b.size || 0);
+    if (sizeDiff) return sizeDiff;
+    return codecScore(a) - codecScore(b);
+  }
+
+  function pickBestFile(files) {
+    return [...(files || [])].sort(compareFiles)[0];
   }
 
   // Pick the scene to keep: highest res, then smallest size (efficient encode), then codec rank
@@ -174,7 +221,8 @@
 
   // ── Multi-file tab ─────────────────────────────────────────────────────────
 
-  function renderMultiFileTable(scenes) {
+  function renderMultiFileTable(scenes, opts = {}) {
+    const { dryRun = false, onSceneDeleted = () => {}, onSceneCleaned = () => {} } = opts;
     if (!scenes.length) {
       return el("div", "color:#5c6370;padding:20px 0;text-align:center;", "No multi-file scenes found ✓");
     }
@@ -185,6 +233,10 @@
 
     for (const scene of scenes) {
       const sceneWrap = document.createElement("div");
+      const currentPrimary = (scene.files || [])[0];
+      const sorted = [...scene.files].sort(compareFiles);
+      const keeper = sorted[0];
+      const extraFiles = sorted.slice(1);
 
       // Header
       const hdr = el("div", STYLE.groupHdr);
@@ -201,17 +253,60 @@
       // Spacer to push delete to right
       hdr.appendChild(el("span", "flex:1;"));
 
+      if (keeper && extraFiles.length) {
+        const cleanBtn = mkBtn(dryRun ? "👁 Preview keep best" : "🧹 Keep best", "#98c379", async () => {
+          if (dryRun) {
+            previewAction(`Keep best file for scene ${sceneName(scene)}`, [
+              `Would keep: ${fileName(keeper)}`,
+              ...(extraFiles.length ? ["", `Would delete ${extraFiles.length} other file(s):`] : []),
+              ...extraFiles.map(f => `- ${fileName(f)}`),
+            ]);
+            return;
+          }
+
+          if (!confirm(
+            `Keep only the best file for "${sceneName(scene)}"?\n\n` +
+            `Best file kept:\n- ${fileName(keeper)}\n\n` +
+            `Other file(s) deleted from disk:\n${extraFiles.map(f => `- ${fileName(f)}`).join("\n")}`
+          )) return;
+
+          cleanBtn.textContent = "Cleaning…"; cleanBtn.disabled = true;
+          try {
+            if (currentPrimary && keeper.id !== currentPrimary.id) {
+              await setScenePrimaryFile(scene.id, keeper.id);
+            }
+            const extraFileIds = extraFiles.map(f => f.id);
+            await deleteFiles(extraFileIds);
+            scene.files = [keeper];
+            onSceneCleaned(scene);
+            toast(`Kept best file for scene #${scene.id}`, "#98c379");
+          } catch (e) {
+            toast(`Cleanup error: ${e.message}`, "#e06c75");
+            cleanBtn.textContent = dryRun ? "👁 Preview keep best" : "🧹 Keep best";
+            cleanBtn.disabled = false;
+          }
+        });
+        hdr.appendChild(cleanBtn);
+      }
+
       // Delete whole scene button
-      const delBtn = mkBtn("🗑 Delete scene", "#e06c75", async () => {
-        if (!confirm(`Delete scene "${scene.title || "#" + scene.id}" and ALL its files from disk?`)) return;
+      const delBtn = mkBtn(dryRun ? "👁 Preview delete scene" : "🗑 Delete scene", "#e06c75", async () => {
+        if (dryRun) {
+          previewAction(`Delete scene ${sceneName(scene)}`, [
+            `Would delete scene #${scene.id} and ${scene.files.length} file(s) from disk:`,
+            ...scene.files.map(f => `- ${fileName(f)}`),
+          ]);
+          return;
+        }
+        if (!confirm(`Delete scene "${sceneName(scene)}" and ALL its files from disk?`)) return;
         delBtn.textContent = "Deleting…"; delBtn.disabled = true;
         try {
           await destroyScene(scene.id, true);
-          sceneWrap.remove();
+          onSceneDeleted(scene.id);
           toast(`Deleted scene #${scene.id}`, "#e06c75");
         } catch(e) {
           toast(`Error: ${e.message}`, "#e06c75");
-          delBtn.textContent = "🗑 Delete scene"; delBtn.disabled = false;
+          delBtn.textContent = dryRun ? "👁 Preview delete scene" : "🗑 Delete scene"; delBtn.disabled = false;
         }
       });
       hdr.appendChild(delBtn);
@@ -227,11 +322,10 @@
         <th style="${STYLE.th}">Size</th>
       </tr></thead>`;
       const tbody = document.createElement("tbody");
-      const sorted = [...scene.files].sort((a, b) => (b.height || 0) - (a.height || 0));
       sorted.forEach((f, i) => {
         const tr = document.createElement("tr");
         tr.style.background = i > 0 ? "rgba(224,108,117,0.06)" : "";
-        const basename = f.basename || f.path.split(/[/\\]/).pop();
+        const basename = fileName(f);
         const dir      = f.path.replace(/[/\\][^/\\]+$/, "");
         const keepMark = i === 0 ? `<span style="${STYLE.keepBadge}">best</span>` : "";
         tr.innerHTML = `
@@ -256,7 +350,8 @@
 
   // ── Duplicates tab ─────────────────────────────────────────────────────────
 
-  function renderDuplicatesTable(groups) {
+  function renderDuplicatesTable(groups, opts = {}) {
+    const { dryRun = false, onSceneDeleted = () => {}, onGroupMerged = () => {} } = opts;
     if (!groups.length) {
       return el("div", "color:#5c6370;padding:20px 0;text-align:center;", "No duplicate scenes found ✓");
     }
@@ -286,9 +381,18 @@
       hdr.appendChild(el("span", "flex:1;"));
 
       // Merge all into best scene
-      const mergeBtn = mkBtn("⚡ Merge all", "#61afef", async () => {
+      const mergeBtn = mkBtn(dryRun ? "👁 Preview merge" : "⚡ Merge all", "#61afef", async () => {
         const sources   = group.filter(s => s.id !== keeper.id);
-        const keepTitle = keeper.title || "#" + keeper.id;
+        const keepTitle = sceneName(keeper);
+        if (dryRun) {
+          previewAction(`Merge duplicates into ${keepTitle}`, [
+            `Would keep destination scene: ${keeper.title ? `#${keeper.id} ${keepTitle}` : keepTitle}`,
+            "",
+            `Would merge ${sources.length} source scene(s):`,
+            ...sources.map(s => `- ${s.title ? `#${s.id} ${sceneName(s)}` : sceneName(s)}`),
+          ]);
+          return;
+        }
         if (!confirm(
           `Merge ${sources.length} scene(s) into "${keepTitle}" (highest resolution)?\n\n` +
           `Source scenes will be removed after merge. Metadata will be combined.`
@@ -296,11 +400,12 @@
         mergeBtn.textContent = "Merging…"; mergeBtn.disabled = true;
         try {
           await mergeScenes(sources.map(s => s.id), keeper.id);
-          groupWrap.remove();
+          const mergedKeeper = await fetchScene(keeper.id);
+          onGroupMerged(group, mergedKeeper);
           toast(`Merged ${sources.length} scene(s) into #${keeper.id}`, "#61afef");
         } catch(e) {
           toast(`Merge error: ${e.message}`, "#e06c75");
-          mergeBtn.textContent = "⚡ Merge all"; mergeBtn.disabled = false;
+          mergeBtn.textContent = dryRun ? "👁 Preview merge" : "⚡ Merge all"; mergeBtn.disabled = false;
         }
       });
       hdr.appendChild(mergeBtn);
@@ -322,10 +427,10 @@
 
       for (const scene of group) {
         const isKeeper  = scene.id === keeper.id;
-        const bestFile  = [...(scene.files || [])].sort((a,b) => (b.height||0)-(a.height||0))[0] || {};
+        const bestFile  = pickBestFile(scene.files) || {};
         const totalSize = (scene.files || []).reduce((n,f) => n+(f.size||0), 0);
         const perfs     = (scene.performers || []).map(p => p.name).join(", ");
-        const filenames = (scene.files || []).map(f => f.basename || f.path.split(/[/\\]/).pop()).join("<br>");
+        const filenames = (scene.files || []).map(fileName).join("<br>");
 
         const tr = document.createElement("tr");
         tr.style.background = isKeeper ? "rgba(152,195,121,0.07)" : "";
@@ -350,20 +455,23 @@
 
         // Delete button on every row — including the keeper
         const tdAct = el("td", STYLE.td);
-        const delBtn = mkBtn("🗑 Delete", "#e06c75", async () => {
+        const delBtn = mkBtn(dryRun ? "👁 Preview delete" : "🗑 Delete", "#e06c75", async () => {
+          if (dryRun) {
+            previewAction(`Delete duplicate scene #${scene.id}`, [
+              `Would delete scene #${scene.id} "${scene.title || ""}" and ${scene.files.length} file(s) from disk:`,
+              ...scene.files.map(f => `- ${fileName(f)}`),
+            ]);
+            return;
+          }
           if (!confirm(`Delete scene #${scene.id} "${scene.title || ""}" and its file(s) from disk?`)) return;
           delBtn.textContent = "Deleting…"; delBtn.disabled = true;
           try {
             await destroyScene(scene.id, true);
-            tr.remove();
-            const idx = group.indexOf(scene);
-            if (idx !== -1) group.splice(idx, 1);
-            countBadge.textContent = `${group.length} scenes`;
-            if (group.length <= 1) groupWrap.remove();
+            onSceneDeleted(scene.id);
             toast(`Deleted scene #${scene.id}`, "#e06c75");
           } catch(e) {
             toast(`Error: ${e.message}`, "#e06c75");
-            delBtn.textContent = "🗑 Delete"; delBtn.disabled = false;
+            delBtn.textContent = dryRun ? "👁 Preview delete" : "🗑 Delete"; delBtn.disabled = false;
           }
         });
         tdAct.appendChild(delBtn);
@@ -394,8 +502,8 @@
     overlay.appendChild(modal);
 
     const header = el("div", STYLE.header);
+    const closeBtn = mkBtn("✕", "#3e4451", () => overlay.remove());
     header.appendChild(el("span", "color:#e5c07b;font-weight:700;font-size:1.1em;", "🔍 DupeFinder"));
-    header.appendChild(mkBtn("✕", "#3e4451", () => overlay.remove()));
     modal.appendChild(header);
 
     const tabBar = el("div", STYLE.tabs);
@@ -406,23 +514,90 @@
 
     body.appendChild(el("div", "color:#5c6370;padding:40px 0;text-align:center;font-size:0.9em;", "Loading scenes… 0 / ?"));
 
-    let multiFileScenes = [], dupGroups = [];
+    let allScenes = [], multiFileScenes = [], dupGroups = [];
+    let currentTab = "multi";
+    let dryRun = false;
+    let loaded = false;
+
+    function refreshDerivedState() {
+      multiFileScenes = findMultiFileScenes(allScenes);
+      dupGroups = findDuplicateScenes(allScenes);
+    }
+
+    function removeSceneFromState(sceneId) {
+      const sceneKey = idKey(sceneId);
+      allScenes = allScenes.filter(scene => idKey(scene.id) !== sceneKey);
+      refreshDerivedState();
+    }
+
+    function refreshMergedGroupState(group, keeperScene) {
+      const keeperKey = idKey(keeperScene.id);
+      const sourceIds = new Set(group.filter(scene => idKey(scene.id) !== keeperKey).map(scene => idKey(scene.id)));
+      let keeperUpdated = false;
+      allScenes = allScenes
+        .filter(scene => !sourceIds.has(idKey(scene.id)))
+        .map(scene => {
+          if (idKey(scene.id) !== keeperKey) return scene;
+          keeperUpdated = true;
+          return keeperScene;
+        });
+      if (!keeperUpdated) allScenes.push(keeperScene);
+      refreshDerivedState();
+    }
 
     function showTab(tab) {
+      currentTab = tab;
       tabBar.innerHTML = "";
       tabBar.appendChild(tabBtn(`Multi-file (${multiFileScenes.length})`, tab === "multi", () => showTab("multi")));
       tabBar.appendChild(tabBtn(`Duplicates (${dupGroups.length})`,       tab === "dupes", () => showTab("dupes")));
       body.innerHTML = "";
-      if (tab === "multi") body.appendChild(renderMultiFileTable(multiFileScenes));
-      else                 body.appendChild(renderDuplicatesTable(dupGroups));
+      if (tab === "multi") {
+        body.appendChild(renderMultiFileTable(multiFileScenes, {
+          dryRun,
+          onSceneDeleted(sceneId) {
+            removeSceneFromState(sceneId);
+            showTab(currentTab);
+          },
+          onSceneCleaned() {
+            refreshDerivedState();
+            showTab(currentTab);
+          },
+        }));
+      } else {
+        body.appendChild(renderDuplicatesTable(dupGroups, {
+          dryRun,
+          onSceneDeleted(sceneId) {
+            removeSceneFromState(sceneId);
+            showTab(currentTab);
+          },
+          onGroupMerged(group, keeperScene) {
+            refreshMergedGroupState(group, keeperScene);
+            showTab(currentTab);
+          },
+        }));
+      }
     }
+
+    const dryRunLabel = el("label", "display:flex;align-items:center;gap:6px;color:#abb2bf;font-size:0.85em;cursor:pointer;margin-left:16px;");
+    const dryRunBox = document.createElement("input");
+    dryRunBox.type = "checkbox";
+    dryRunBox.addEventListener("change", () => {
+      dryRun = dryRunBox.checked;
+      if (loaded) showTab(currentTab);
+    });
+    dryRunLabel.appendChild(dryRunBox);
+    dryRunLabel.appendChild(document.createTextNode("Dry run / preview mode"));
+    header.appendChild(dryRunLabel);
+    header.appendChild(el("span", "flex:1;"));
+    header.appendChild(closeBtn);
 
     fetchAllScenes((loaded, total) => {
       const p = body.querySelector("div");
       if (p) p.textContent = `Loading scenes… ${loaded} / ${total}`;
     }).then(scenes => {
-      multiFileScenes = findMultiFileScenes(scenes);
-      dupGroups       = findDuplicateScenes(scenes);
+      allScenes = scenes;
+      refreshDerivedState();
+      loaded = true;
       showTab("multi");
     }).catch(err => {
       body.innerHTML = "";
