@@ -118,6 +118,9 @@ a scene row to select the keeper.
 - Multi-value metadata such as performers, tags, galleries, URLs, groups, and
   stash IDs is combined without duplicates, with keeper values first.
 - Conflicting populated scalar values from source scenes are discarded.
+- If the keeper has no cover, the first available source scene cover is copied
+  to it during the merge. Preview shows the image decoded from the
+  same base64 data URL used for the update.
 - Non-keeper scenes and all files belonging to them are then permanently
   deleted.
 - Files already attached to the keep scene remain in place.

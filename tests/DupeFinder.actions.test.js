@@ -6,7 +6,7 @@ const vm = require("node:vm");
 
 function loadActions() {
   const source = fs.readFileSync(path.join(__dirname, "..", "DupeFinder.actions.js"), "utf8");
-  const context = { window: {} };
+  const context = { window: {}, console: { warn() {} } };
   vm.runInNewContext(source, context, { filename: "DupeFinder.actions.js" });
   return context.window.DupeFinder.actions;
 }
@@ -22,6 +22,7 @@ test("duplicate merge deletes only source file IDs after scene merge", async () 
     async mergeScenes(sourceIds, keeperId, values) {
       calls.push(["mergeScenes", Array.from(sourceIds), keeperId, values]);
     },
+    async fetchImageDataUrl() { throw new Error("No image"); },
     async deleteFiles(fileIds) {
       calls.push(["deleteFiles", Array.from(fileIds)]);
     },
@@ -52,6 +53,116 @@ test("duplicate merge deletes only source file IDs after scene merge", async () 
   ]);
   assert.equal(mergedKeeper.id, "keep-scene");
   assert.deepEqual(Array.from(mergedKeeper.files, file => file.id), ["keep-file"]);
+});
+
+test("duplicate merge copies the first available source cover when keeper has none", async () => {
+  const actions = loadActions();
+  const calls = [];
+  const api = {
+    async fetchImageDataUrl(url) {
+      calls.push(["fetchImageDataUrl", url]);
+      return "data:image/jpeg;base64,Y292ZXI=";
+    },
+    async mergeScenes(sourceIds, keeperId, values) {
+      calls.push(["mergeScenes", Array.from(sourceIds), keeperId, values]);
+    },
+    async deleteFiles() {},
+    async fetchScene(sceneId) { return { id: sceneId }; },
+  };
+
+  await actions.mergeDuplicateGroup(
+    api,
+    { id: "10", organized: false, paths: { screenshot: null } },
+    [
+      { id: "11", paths: { screenshot: "" } },
+      { id: "12", paths: { screenshot: "/scene/12/screenshot" } },
+    ]
+  );
+
+  assert.deepEqual(clone(calls), [
+    ["fetchImageDataUrl", "/scene/12/screenshot"],
+    ["mergeScenes", ["11", "12"], "10", {
+      id: "10",
+      organized: false,
+      cover_image: "data:image/jpeg;base64,Y292ZXI=",
+    }],
+  ]);
+});
+
+test("duplicate merge keeps an available keeper cover", async () => {
+  const actions = loadActions();
+  const fetchedPaths = [];
+  let mergedValues;
+  const api = {
+    async fetchImageDataUrl(url) {
+      fetchedPaths.push(url);
+      return "data:image/jpeg;base64,a2VlcGVy";
+    },
+    async mergeScenes(_sourceIds, _keeperId, values) { mergedValues = values; },
+    async deleteFiles() {},
+    async fetchScene(sceneId) { return { id: sceneId }; },
+  };
+
+  await actions.mergeDuplicateGroup(
+    api,
+    { id: "10", organized: false, paths: { screenshot: "/scene/10/screenshot" } },
+    [{ id: "11", paths: { screenshot: "/scene/11/screenshot" } }]
+  );
+
+  assert.deepEqual(fetchedPaths, ["/scene/10/screenshot"]);
+  assert.equal(Object.prototype.hasOwnProperty.call(mergedValues, "cover_image"), false);
+});
+
+test("duplicate merge copies a source cover when the keeper screenshot path is stale", async () => {
+  const actions = loadActions();
+  const calls = [];
+  const api = {
+    async fetchImageDataUrl(url) {
+      calls.push(["fetch", url]);
+      if (url === "/scene/10/screenshot" || url === "/scene/11/screenshot") {
+        throw new Error("HTTP 404");
+      }
+      return "data:image/png;base64,c291cmNl";
+    },
+    async mergeScenes(_sourceIds, _keeperId, values) {
+      calls.push(["merge", values]);
+    },
+    async deleteFiles() {},
+    async fetchScene(id) { return { id }; },
+  };
+
+  await actions.mergeDuplicateGroup(api,
+    { id: "10", organized: false, paths: { screenshot: "/scene/10/screenshot" } },
+    [
+      { id: "11", paths: { screenshot: "/scene/11/screenshot" } },
+      { id: "12", paths: { screenshot: "/scene/12/screenshot" } },
+    ]);
+
+  assert.deepEqual(clone(calls), [
+    ["fetch", "/scene/10/screenshot"],
+    ["fetch", "/scene/11/screenshot"],
+    ["fetch", "/scene/12/screenshot"],
+    ["merge", { id: "10", organized: false, cover_image: "data:image/png;base64,c291cmNl" }],
+  ]);
+});
+
+test("duplicate merge continues when a source cover cannot be loaded", async () => {
+  const actions = loadActions();
+  let mergedValues;
+  const api = {
+    async fetchImageDataUrl() { throw new Error("missing image"); },
+    async mergeScenes(_sourceIds, _keeperId, values) { mergedValues = values; },
+    async deleteFiles() {},
+    async fetchScene(sceneId) { return { id: sceneId }; },
+  };
+
+  await actions.mergeDuplicateGroup(
+    api,
+    { id: "10", organized: false, paths: {} },
+    [{ id: "11", paths: { screenshot: "/scene/11/screenshot" } }]
+  );
+
+  assert.deepEqual(clone(mergedValues), { id: "10", organized: false });
 });
 
 test("buildMergedSceneValues preserves keeper scalars when sources conflict", () => {

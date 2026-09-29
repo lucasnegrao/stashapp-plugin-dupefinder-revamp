@@ -62,6 +62,7 @@
       groups { group { id name } scene_index }
       tags { id name }
       stash_ids { endpoint stash_id }
+      paths { screenshot }
       files {
         id path basename size video_codec height duration
         ${includeFingerprints ? "fingerprints { type value }" : ""}
@@ -193,6 +194,26 @@
           destination: String(destinationId),
           values,
         },
+      });
+    },
+    async fetchImageDataUrl(url) {
+      const res = await fetch(url, { cache: "no-store" });
+      if (!res.ok) throw new Error(`Unable to load scene cover: HTTP ${res.status}`);
+      const blob = await res.blob();
+      if (!blob.type.startsWith("image/") || !blob.size) {
+        throw new Error(`Scene cover response is not an image (${blob.type || "unknown type"})`);
+      }
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          if (typeof reader.result === "string" && /^data:image\/[^;,]+;base64,/.test(reader.result)) {
+            resolve(reader.result);
+          } else {
+            reject(new Error("Unable to encode scene cover as an image data URL"));
+          }
+        };
+        reader.onerror = () => reject(reader.error || new Error("Unable to read scene cover"));
+        reader.readAsDataURL(blob);
       });
     },
     async deleteFiles(fileIds) {

@@ -245,6 +245,7 @@
       if (mergePreviewOverlay && mergePreviewOverlay.isConnected) mergePreviewOverlay.remove();
       mergePreviewOverlay = tables.renderMergePreviewModal({
         plans,
+        api,
         onClose() {
           if (mergePreviewOverlay && mergePreviewOverlay.parentNode) mergePreviewOverlay.remove();
           mergePreviewOverlay = null;

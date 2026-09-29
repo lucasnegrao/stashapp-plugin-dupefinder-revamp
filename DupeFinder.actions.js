@@ -208,9 +208,44 @@
     };
   }
 
+  async function prepareMergedSceneCover(api, keeper, sources) {
+    const keeperPath = keeper && keeper.paths && keeper.paths.screenshot;
+    let keeperError = null;
+    if (!isEmptyScalar(keeperPath)) {
+      try {
+        const dataUrl = await api.fetchImageDataUrl(keeperPath);
+        return { status: "kept", sceneId: String(keeper.id), dataUrl };
+      } catch (error) {
+        // A screenshot path can exist even when the image is missing.
+        keeperError = error.message;
+      }
+    }
+
+    const errors = [];
+    for (const source of sources || []) {
+      const path = source && source.paths && source.paths.screenshot;
+      if (isEmptyScalar(path)) continue;
+      try {
+        const dataUrl = await api.fetchImageDataUrl(path);
+        return { status: "copy", sceneId: String(source.id), dataUrl, keeperError };
+      } catch (error) {
+        errors.push(`#${source.id}: ${error.message}`);
+      }
+    }
+    return {
+      status: "unavailable",
+      message: [
+        keeperError ? `Keeper #${keeper.id}: ${keeperError}` : null,
+        errors.length ? errors.join("; ") : "No source scene has an available image.",
+      ].filter(Boolean).join("; "),
+    };
+  }
+
   async function mergeDuplicateGroup(api, keeper, sources) {
     const sourceFileIds = sources.flatMap(scene => (scene.files || []).map(file => file.id));
     const values = buildMergedSceneValues(keeper, sources);
+    const cover = await prepareMergedSceneCover(api, keeper, sources);
+    if (cover.status === "copy") values.cover_image = cover.dataUrl;
     await api.mergeScenes(
       sources.map(scene => scene.id),
       keeper.id,
@@ -223,6 +258,7 @@
   root.actions = {
     buildMergedSceneValues,
     formatMergedScenePreview,
+    prepareMergedSceneCover,
     mergeDuplicateGroup,
   };
 })();

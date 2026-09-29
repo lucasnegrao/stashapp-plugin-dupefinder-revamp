@@ -6,7 +6,7 @@ const vm = require("node:vm");
 
 function loadApi(fetch) {
   const source = fs.readFileSync(path.join(__dirname, "..", "DupeFinder.api.js"), "utf8");
-  const context = { window: {}, fetch };
+  const context = { window: {}, fetch, FileReader: class {} };
   vm.runInNewContext(source, context, { filename: "DupeFinder.api.js" });
   return context.window.DupeFinder.api;
 }
@@ -42,9 +42,47 @@ test("scene loading queries merge metadata fields used by duplicate merge", asyn
   assert.match(requests[0].body.query, /galleries\s*\{\s*id\s+title\s*\}/);
   assert.match(requests[0].body.query, /groups\s*\{\s*group\s*\{\s*id\s+name\s*\}\s*scene_index\s*\}/);
   assert.match(requests[0].body.query, /stash_ids\s*\{\s*endpoint\s+stash_id\s*\}/);
-  assert.doesNotMatch(requests[0].body.query, /paths\s*\{/);
+  assert.match(requests[0].body.query, /paths\s*\{\s*screenshot\s*\}/);
   assert.doesNotMatch(requests[0].body.query, /cover_image/);
   assert.match(requests[0].body.query, /fingerprints\s*\{\s*type\s+value\s*\}/);
+});
+
+test("fetchImageDataUrl downloads an image and returns a data URL", async () => {
+  class MockFileReader {
+    readAsDataURL(blob) {
+      this.result = `data:${blob.type};base64,bW9jaw==`;
+      this.onload();
+    }
+  }
+  const source = fs.readFileSync(path.join(__dirname, "..", "DupeFinder.api.js"), "utf8");
+  const context = {
+    window: {},
+    FileReader: MockFileReader,
+    fetch: async (url, options) => {
+      assert.equal(url, "/scene/11/screenshot");
+      assert.equal(options.cache, "no-store");
+      return {
+        ok: true,
+        status: 200,
+        async blob() { return { type: "image/jpeg", size: 4 }; },
+      };
+    },
+  };
+  vm.runInNewContext(source, context, { filename: "DupeFinder.api.js" });
+
+  const result = await context.window.DupeFinder.api.fetchImageDataUrl("/scene/11/screenshot");
+
+  assert.equal(result, "data:image/jpeg;base64,bW9jaw==");
+});
+
+test("fetchImageDataUrl rejects a successful non-image response", async () => {
+  const api = loadApi(async () => ({
+    ok: true,
+    status: 200,
+    async blob() { return { type: "text/html", size: 20 }; },
+  }));
+
+  await assert.rejects(api.fetchImageDataUrl("/scene/11/screenshot"), /not an image/);
 });
 
 test("mergeScenes sends calculated values through SceneMergeInput", async () => {

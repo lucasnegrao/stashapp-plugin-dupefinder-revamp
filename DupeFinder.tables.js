@@ -128,9 +128,10 @@
     return overlay;
   }
 
-  function renderMergePreviewModal({ plans, onClose }) {
+  function renderMergePreviewModal({ plans, api, onClose }) {
     const planList = Array.isArray(plans) ? plans.filter(plan => plan && plan.keeper) : [];
     let index = 0;
+    let renderToken = 0;
 
     const overlay = ui.el("div", "position:absolute;inset:0;background:rgba(0,0,0,0.62);display:flex;align-items:center;justify-content:center;z-index:6;padding:20px;");
     const panel = ui.el("div", "width:720px;max-width:96%;max-height:90%;overflow:auto;background:#2c313a;border:1px solid #3e4451;border-radius:8px;padding:16px;box-shadow:0 8px 32px rgba(0,0,0,0.5);");
@@ -151,8 +152,9 @@
     const counter = ui.el("div", "color:#9aa3b2;font-size:0.82em;margin-bottom:10px;");
     const summary = ui.el("div", "color:#abb2bf;font-size:0.84em;line-height:1.5;margin-bottom:12px;");
     const fieldsWrap = ui.el("div", "");
+    const coverWrap = ui.el("div", "margin-top:14px;");
     const empty = ui.el("div", STYLE.hintText + "font-size:0.88em;", "No merge plans to preview.");
-    panel.append(counter, summary, fieldsWrap, empty);
+    panel.append(counter, summary, fieldsWrap, coverWrap, empty);
 
     const footer = ui.el("div", "display:flex;align-items:center;gap:8px;margin-top:14px;");
     const prevBtn = ui.mkBtn("← Prev", "#3e4451", () => {
@@ -172,11 +174,13 @@
     panel.appendChild(footer);
 
     function renderCurrent() {
+      const token = ++renderToken;
       const hasPlans = planList.length > 0;
       empty.style.display = hasPlans ? "none" : "block";
       counter.style.display = hasPlans && planList.length > 1 ? "block" : "none";
       summary.style.display = hasPlans ? "block" : "none";
       fieldsWrap.innerHTML = "";
+      coverWrap.innerHTML = "";
       summary.innerHTML = "";
 
       prevBtn.disabled = !hasPlans || index <= 0;
@@ -207,6 +211,31 @@
           "Sources: " + sources.map(scene => `#${scene.id}${scene.title ? " " + scene.title : ""}`).join(", ")
         ));
       }
+
+      coverWrap.appendChild(ui.el("div", "color:#61afef;font-weight:600;margin-bottom:6px;", "Cover image"));
+      const coverStatus = ui.el("div", STYLE.hintText + "font-size:0.84em;", "Loading image for preview…");
+      coverWrap.appendChild(coverStatus);
+      actions.prepareMergedSceneCover(api, plan.keeper, sources).then(cover => {
+        if (token !== renderToken) return;
+        if (cover.status === "unavailable") {
+          coverStatus.textContent = `No cover can be copied. ${cover.message}`;
+          return;
+        }
+        coverStatus.textContent = cover.status === "copy"
+          ? `Would copy the cover from scene #${cover.sceneId}.${cover.keeperError ? ` Keeper image unavailable: ${cover.keeperError}` : ""}`
+          : `Keeping the cover from scene #${cover.sceneId}.`;
+        const image = document.createElement("img");
+        image.src = cover.dataUrl;
+        image.alt = `Decoded cover image from scene #${cover.sceneId}`;
+        image.style.cssText = "display:block;max-width:100%;max-height:260px;object-fit:contain;margin-top:8px;border:1px solid #3e4451;";
+        image.onerror = () => { coverStatus.textContent = "The downloaded data URL could not be displayed as an image."; };
+        coverWrap.appendChild(image);
+        const mime = cover.dataUrl.slice(5, cover.dataUrl.indexOf(";base64,"));
+        coverWrap.appendChild(ui.el("div", STYLE.hintText + "font-size:0.78em;margin-top:5px;", `${mime} · ${cover.dataUrl.length.toLocaleString()} data URL characters`));
+        coverWrap.appendChild(ui.el("code", STYLE.hintText + "display:block;font-size:0.72em;word-break:break-all;", `${cover.dataUrl.slice(0, 64)}…`));
+      }).catch(error => {
+        if (token === renderToken) coverStatus.textContent = `Unable to preview cover: ${error.message}`;
+      });
 
       if (!preview.fields.length) {
         fieldsWrap.appendChild(ui.el("div", STYLE.hintText + "font-size:0.84em;", "No descriptive metadata would be written for this merge."));
