@@ -62,7 +62,7 @@
       groups { group { id name } scene_index }
       tags { id name }
       stash_ids { endpoint stash_id }
-      paths { screenshot }
+      paths { screenshot stream }
       files {
         id path basename size video_codec height duration
         ${includeFingerprints ? "fingerprints { type value }" : ""}
@@ -203,6 +203,9 @@
       if (!blob.type.startsWith("image/") || !blob.size) {
         throw new Error(`Scene cover response is not an image (${blob.type || "unknown type"})`);
       }
+      if (blob.type.toLowerCase().split(";")[0] === "image/svg+xml") {
+        throw new Error("Stash returned its SVG placeholder instead of a scene cover");
+      }
       return new Promise((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = () => {
@@ -215,6 +218,22 @@
         reader.onerror = () => reject(reader.error || new Error("Unable to read scene cover"));
         reader.readAsDataURL(blob);
       });
+    },
+    async isSceneStreamAvailable(url) {
+      if (!url) return false;
+      try {
+        let res = await fetch(url, { method: "HEAD", cache: "no-store" });
+        if (res.status === 405) {
+          res = await fetch(url, {
+            headers: { Range: "bytes=0-0" },
+            cache: "no-store",
+          });
+          if (res.body) await res.body.cancel();
+        }
+        return res.ok;
+      } catch (_) {
+        return false;
+      }
     },
     async deleteFiles(fileIds) {
       return gql(`

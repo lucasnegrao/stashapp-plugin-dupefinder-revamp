@@ -19,6 +19,7 @@ test("duplicate merge deletes only source file IDs after scene merge", async () 
   const actions = loadActions();
   const calls = [];
   const api = {
+    async isSceneStreamAvailable() { return true; },
     async mergeScenes(sourceIds, keeperId, values) {
       calls.push(["mergeScenes", Array.from(sourceIds), keeperId, values]);
     },
@@ -34,6 +35,7 @@ test("duplicate merge deletes only source file IDs after scene merge", async () 
   const keeper = {
     id: "keep-scene",
     files: [{ id: "keep-file" }],
+    paths: { stream: "/scene/keep-scene/stream" },
     organized: false,
   };
   const sources = [
@@ -53,6 +55,70 @@ test("duplicate merge deletes only source file IDs after scene merge", async () 
   ]);
   assert.equal(mergedKeeper.id, "keep-scene");
   assert.deepEqual(Array.from(mergedKeeper.files, file => file.id), ["keep-file"]);
+});
+
+test("duplicate merge preserves transferred files when keeper has no file", async () => {
+  const actions = loadActions();
+  const calls = [];
+  const api = {
+    async mergeScenes() { calls.push("merge"); },
+    async deleteFiles() { calls.push("delete"); },
+    async setScenePrimaryFile() { calls.push("set-primary"); },
+    async fetchScene(id) { calls.push("fetch"); return { id }; },
+  };
+
+  await actions.mergeDuplicateGroup(api,
+    { id: "10", files: [], organized: false },
+    [{ id: "11", files: [{ id: "source-file" }] }]);
+
+  assert.deepEqual(calls, ["merge", "fetch"]);
+});
+
+test("duplicate merge replaces an unavailable keeper primary and preserves transferred files", async () => {
+  const actions = loadActions();
+  const calls = [];
+  const api = {
+    async isSceneStreamAvailable(url) {
+      calls.push(["probe", url]);
+      return false;
+    },
+    async mergeScenes() { calls.push("merge"); },
+    async setScenePrimaryFile(sceneId, fileId) { calls.push(["set-primary", sceneId, fileId]); },
+    async deleteFiles() { calls.push("delete"); },
+    async fetchScene(id) { calls.push("fetch"); return { id }; },
+  };
+
+  await actions.mergeDuplicateGroup(api,
+    { id: "10", files: [{ id: "missing-file" }], paths: { stream: "/scene/10/stream" }, organized: false },
+    [{ id: "11", files: [{ id: "source-file" }] }]);
+
+  assert.deepEqual(calls, [
+    ["probe", "/scene/10/stream"],
+    "merge",
+    ["set-primary", "10", "source-file"],
+    "fetch",
+  ]);
+});
+
+test("duplicate merge selects an available source file over a missing one", async () => {
+  const { prepareMergeFilePlan } = loadActions();
+  const checked = [];
+  const api = {
+    async isSceneStreamAvailable(url) {
+      checked.push(url);
+      return url === "/scene/12/stream";
+    },
+  };
+
+  const plan = await prepareMergeFilePlan(api,
+    { id: "10", files: [{ id: "missing-keeper" }], paths: { stream: "/scene/10/stream" } },
+    [
+      { id: "11", files: [{ id: "missing-source" }], paths: { stream: "/scene/11/stream" } },
+      { id: "12", files: [{ id: "good-source" }], paths: { stream: "/scene/12/stream" } },
+    ]);
+
+  assert.deepEqual(checked, ["/scene/10/stream", "/scene/11/stream", "/scene/12/stream"]);
+  assert.deepEqual(clone(plan), { deleteSourceFiles: false, replacementFileId: "good-source" });
 });
 
 test("duplicate merge copies the first available source cover when keeper has none", async () => {
@@ -144,6 +210,30 @@ test("duplicate merge copies a source cover when the keeper screenshot path is s
     ["fetch", "/scene/12/screenshot"],
     ["merge", { id: "10", organized: false, cover_image: "data:image/png;base64,c291cmNl" }],
   ]);
+});
+
+test("cover preview skips SVG placeholders and selects a source poster", async () => {
+  const { prepareMergedSceneCover } = loadActions();
+  const api = {
+    async fetchImageDataUrl(url) {
+      if (url !== "/scene/12/screenshot") throw new Error("Stash returned its SVG placeholder instead of a scene cover");
+      return "data:image/jpeg;base64,cG9zdGVy";
+    },
+  };
+
+  const cover = await prepareMergedSceneCover(api,
+    { id: "10", paths: { screenshot: "/scene/10/screenshot" } },
+    [
+      { id: "11", paths: { screenshot: "/scene/11/screenshot" } },
+      { id: "12", paths: { screenshot: "/scene/12/screenshot" } },
+    ]);
+
+  assert.deepEqual(clone(cover), {
+    status: "copy",
+    sceneId: "12",
+    dataUrl: "data:image/jpeg;base64,cG9zdGVy",
+    keeperError: "Stash returned its SVG placeholder instead of a scene cover",
+  });
 });
 
 test("duplicate merge continues when a source cover cannot be loaded", async () => {

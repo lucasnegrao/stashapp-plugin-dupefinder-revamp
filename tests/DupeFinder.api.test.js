@@ -42,9 +42,21 @@ test("scene loading queries merge metadata fields used by duplicate merge", asyn
   assert.match(requests[0].body.query, /galleries\s*\{\s*id\s+title\s*\}/);
   assert.match(requests[0].body.query, /groups\s*\{\s*group\s*\{\s*id\s+name\s*\}\s*scene_index\s*\}/);
   assert.match(requests[0].body.query, /stash_ids\s*\{\s*endpoint\s+stash_id\s*\}/);
-  assert.match(requests[0].body.query, /paths\s*\{\s*screenshot\s*\}/);
+  assert.match(requests[0].body.query, /paths\s*\{\s*screenshot\s+stream\s*\}/);
   assert.doesNotMatch(requests[0].body.query, /cover_image/);
   assert.match(requests[0].body.query, /fingerprints\s*\{\s*type\s+value\s*\}/);
+});
+
+test("isSceneStreamAvailable checks the destination without downloading it", async () => {
+  const requests = [];
+  const api = loadApi(async (url, options) => {
+    requests.push({ url, options });
+    return { ok: false, status: 404 };
+  });
+
+  assert.equal(await api.isSceneStreamAvailable("/scene/10/stream"), false);
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0].options.method, "HEAD");
 });
 
 test("fetchImageDataUrl downloads an image and returns a data URL", async () => {
@@ -83,6 +95,16 @@ test("fetchImageDataUrl rejects a successful non-image response", async () => {
   }));
 
   await assert.rejects(api.fetchImageDataUrl("/scene/11/screenshot"), /not an image/);
+});
+
+test("fetchImageDataUrl rejects Stash's SVG scene placeholder", async () => {
+  const api = loadApi(async () => ({
+    ok: true,
+    status: 200,
+    async blob() { return { type: "image/svg+xml", size: 1024 }; },
+  }));
+
+  await assert.rejects(api.fetchImageDataUrl("/scene/10/screenshot"), /SVG placeholder/);
 });
 
 test("mergeScenes sends calculated values through SceneMergeInput", async () => {

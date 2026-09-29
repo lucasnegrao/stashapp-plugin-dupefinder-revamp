@@ -437,8 +437,8 @@
 
       if (!confirm(
         `Merge ${sources.length} scene(s) into the selected keep scene "${keepTitle}"?\n\n` +
-        `Metadata will be combined, then ${sourceFiles.length} file(s) from the source scenes will be deleted from disk. ` +
-        `Only the selected keep scene and its existing file(s) will remain.`
+        `Metadata will be combined. ${sourceFiles.length} source file(s) will be deleted only if the keeper file is available; ` +
+        `otherwise they will remain attached to the keeper scene.`
       )) return;
 
       try {
@@ -880,7 +880,7 @@
           (count, plan) => count + plan.sources.reduce((fileCount, scene) => fileCount + (scene.files || []).length, 0),
           0
         );
-        if (!confirm(`Merge ${previewPlans.length} duplicate group(s) into their selected keep scenes?\n\nMetadata will be combined, then ${totalSources} source scene(s) and ${totalSourceFiles} source file(s) will be permanently removed. Only each selected keep scene and its existing files will remain.`)) return;
+        if (!confirm(`Merge ${previewPlans.length} duplicate group(s) into their selected keep scenes?\n\nMetadata will be combined and ${totalSources} source scene(s) will be removed. Up to ${totalSourceFiles} source file(s) will be deleted only when the keeper file is available; otherwise they will remain attached to the keeper.`)) return;
 
         try {
           let merged = 0;

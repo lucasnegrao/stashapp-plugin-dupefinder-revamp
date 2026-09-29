@@ -203,8 +203,18 @@
       summary.appendChild(document.createTextNode(`Destination: ${keepLabel}`));
       summary.appendChild(document.createElement("br"));
       summary.appendChild(document.createTextNode(
-        `Would merge ${preview.sourceCount} source scene(s) and permanently delete ${preview.sourceFileCount} source file(s).`
+        `Would merge ${preview.sourceCount} source scene(s).`
       ));
+      const fileStatus = ui.el("div", "color:#abb2bf;margin-top:4px;", "Checking destination file…");
+      summary.appendChild(fileStatus);
+      actions.prepareMergeFilePlan(api, plan.keeper, sources).then(filePlan => {
+        if (token !== renderToken) return;
+        fileStatus.textContent = filePlan.deleteSourceFiles
+          ? `Would delete ${preview.sourceFileCount} source file(s) because the destination file is available.`
+          : `Would keep ${preview.sourceFileCount} transferred source file(s) because the destination has no available file.`;
+      }).catch(error => {
+        if (token === renderToken) fileStatus.textContent = `Unable to check destination file: ${error.message}`;
+      });
       if (sources.length) {
         summary.appendChild(document.createElement("br"));
         summary.appendChild(document.createTextNode(

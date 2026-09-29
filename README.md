@@ -120,9 +120,11 @@ a scene row to select the keeper.
 - Conflicting populated scalar values from source scenes are discarded.
 - If the keeper has no cover, the first available source scene cover is copied
   to it during the merge. Preview shows the image decoded from the
-  same base64 data URL used for the update.
-- Non-keeper scenes and all files belonging to them are then permanently
-  deleted.
+  same base64 data URL used for the update. Stash's SVG scene placeholder is
+  treated as a missing cover.
+- Non-keeper scenes are removed. Their files are deleted only when the keeper's
+  file is available. If the keeper has no file or its file is unavailable, the
+  source files stay attached to it; a source file becomes primary when needed.
 - Files already attached to the keep scene remain in place.
 - In Batch mode, exclude groups you do not want processed, then run Merge.
 

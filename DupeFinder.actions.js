@@ -241,8 +241,34 @@
     };
   }
 
+  async function prepareMergeFilePlan(api, keeper, sources) {
+    const keeperFiles = keeper.files || [];
+    if (keeperFiles.length && keeper.paths && keeper.paths.stream &&
+        await api.isSceneStreamAvailable(keeper.paths.stream)) {
+      return { deleteSourceFiles: true, replacementFileId: null };
+    }
+
+    const firstSourceFile = (sources || []).flatMap(scene => scene.files || [])[0];
+    let replacementFileId = firstSourceFile ? firstSourceFile.id : null;
+    for (const source of sources || []) {
+      const sourceFiles = source.files || [];
+      if (!sourceFiles.length || !source.paths || !source.paths.stream) continue;
+      if (await api.isSceneStreamAvailable(source.paths.stream)) {
+        replacementFileId = sourceFiles[0].id;
+        break;
+      }
+    }
+    return {
+      deleteSourceFiles: false,
+      replacementFileId: keeperFiles.length || (firstSourceFile && replacementFileId !== firstSourceFile.id)
+        ? replacementFileId
+        : null,
+    };
+  }
+
   async function mergeDuplicateGroup(api, keeper, sources) {
     const sourceFileIds = sources.flatMap(scene => (scene.files || []).map(file => file.id));
+    const filePlan = await prepareMergeFilePlan(api, keeper, sources);
     const values = buildMergedSceneValues(keeper, sources);
     const cover = await prepareMergedSceneCover(api, keeper, sources);
     if (cover.status === "copy") values.cover_image = cover.dataUrl;
@@ -251,7 +277,10 @@
       keeper.id,
       values
     );
-    if (sourceFileIds.length) await api.deleteFiles(sourceFileIds);
+    if (filePlan.replacementFileId !== null) {
+      await api.setScenePrimaryFile(keeper.id, filePlan.replacementFileId);
+    }
+    if (filePlan.deleteSourceFiles && sourceFileIds.length) await api.deleteFiles(sourceFileIds);
     return api.fetchScene(keeper.id);
   }
 
@@ -259,6 +288,7 @@
     buildMergedSceneValues,
     formatMergedScenePreview,
     prepareMergedSceneCover,
+    prepareMergeFilePlan,
     mergeDuplicateGroup,
   };
 })();
