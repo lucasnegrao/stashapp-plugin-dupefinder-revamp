@@ -54,8 +54,13 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           ARCHIVE: ${{ steps.package.outputs.archive }}
         run: |
+          notes_file=".github/release-notes/${GITHUB_REF_NAME}.md"
+          notes_args=(--generate-notes)
+          if [[ -f "$notes_file" ]]; then
+            notes_args=(--notes-file "$notes_file")
+          fi
           gh release create "$GITHUB_REF_NAME" \
             "$ARCHIVE" "$ARCHIVE.sha256" \
             --verify-tag \
             --title "DupeFinder Revamp $GITHUB_REF_NAME" \
-            --generate-notes
+            "${notes_args[@]}"

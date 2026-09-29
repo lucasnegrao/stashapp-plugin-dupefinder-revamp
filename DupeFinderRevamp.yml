@@ -1,6 +1,6 @@
 name: DupeFinder Revamp
 description: Find duplicate scenes and clean up multi-file scenes in your Stash library.
-version: "1.0"
+version: "1.0.1"
 url: "https://github.com/lucasnegrao/stashapp-plugin-dupefinder-revamp"
 
 settings:
