@@ -132,31 +132,34 @@
     const planList = Array.isArray(plans) ? plans.filter(plan => plan && plan.keeper) : [];
     let index = 0;
     let renderToken = 0;
+    const posterFrameStyle = "width:140px;height:210px;flex-shrink:0;border-radius:6px;overflow:hidden;background:#21252b;border:1px solid #3e4451;";
+    const metaChipStyle = "display:inline-flex;align-items:center;padding:3px 8px;border-radius:999px;font-size:0.75em;font-weight:600;background:#21252b;border:1px solid #3e4451;color:#abb2bf;";
+    const sceneTagStyle = "display:inline-flex;align-items:center;justify-content:center;min-width:22px;padding:1px 6px;border-radius:999px;font-size:0.72em;font-weight:700;background:#3e4451;color:#e5c07b;letter-spacing:0.02em;";
 
     const overlay = ui.el("div", "position:absolute;inset:0;background:rgba(0,0,0,0.62);display:flex;align-items:center;justify-content:center;z-index:6;padding:20px;");
-    const panel = ui.el("div", "width:720px;max-width:96%;max-height:90%;overflow:auto;background:#2c313a;border:1px solid #3e4451;border-radius:8px;padding:16px;box-shadow:0 8px 32px rgba(0,0,0,0.5);");
+    const panel = ui.el("div", "width:760px;max-width:96%;max-height:90%;display:flex;flex-direction:column;background:#2c313a;border:1px solid #3e4451;border-radius:8px;box-shadow:0 8px 32px rgba(0,0,0,0.5);overflow:hidden;");
     panel.setAttribute("role", "dialog");
     panel.setAttribute("aria-modal", "true");
     panel.setAttribute("aria-labelledby", "df-merge-preview-title");
 
-    const header = ui.el("div", "display:flex;align-items:center;gap:10px;margin-bottom:12px;");
+    const header = ui.el("div", "flex-shrink:0;display:flex;align-items:center;gap:12px;padding:14px 16px;border-bottom:1px solid #3e4451;");
     const title = ui.el("div", "color:#e5c07b;font-weight:700;font-size:1em;", "DRY RUN / PREVIEW — Merge metadata");
     title.id = "df-merge-preview-title";
-    const closeBtn = ui.mkBtn("✕", "#3e4451", onClose);
-    closeBtn.title = "Close preview";
-    closeBtn.setAttribute("aria-label", "Close merge preview");
-    closeBtn.style.cssText += "margin-left:auto;width:34px;height:34px;padding:0;display:inline-flex;align-items:center;justify-content:center;";
-    header.append(title, closeBtn);
+    const counter = ui.el("div", "margin-left:auto;color:#9aa3b2;font-size:0.8em;font-weight:600;");
+    header.append(title, counter);
     panel.appendChild(header);
 
-    const counter = ui.el("div", "color:#9aa3b2;font-size:0.82em;margin-bottom:10px;");
-    const summary = ui.el("div", "color:#abb2bf;font-size:0.84em;line-height:1.5;margin-bottom:12px;");
-    const fieldsWrap = ui.el("div", "");
-    const coverWrap = ui.el("div", "margin-top:14px;");
+    const content = ui.el("div", "flex:1;min-height:0;overflow:auto;padding:16px;");
     const empty = ui.el("div", STYLE.hintText + "font-size:0.88em;", "No merge plans to preview.");
-    panel.append(counter, summary, fieldsWrap, coverWrap, empty);
+    const hero = ui.el("div", "display:flex;gap:16px;align-items:flex-start;margin-bottom:16px;");
+    const coverWrap = ui.el("div", posterFrameStyle);
+    const summary = ui.el("div", "min-width:0;flex:1;display:flex;flex-direction:column;gap:8px;padding-top:2px;");
+    const fieldsWrap = ui.el("div", "");
+    hero.append(coverWrap, summary);
+    content.append(empty, hero, fieldsWrap);
+    panel.appendChild(content);
 
-    const footer = ui.el("div", "display:flex;align-items:center;gap:8px;margin-top:14px;");
+    const footer = ui.el("div", "flex-shrink:0;display:flex;align-items:center;gap:8px;padding:12px 16px;border-top:1px solid #3e4451;background:#2c313a;");
     const prevBtn = ui.mkBtn("← Prev", "#3e4451", () => {
       if (index <= 0) return;
       index -= 1;
@@ -173,15 +176,29 @@
     footer.append(spacer, doneBtn);
     panel.appendChild(footer);
 
+    function setPosterPlaceholder() {
+      coverWrap.innerHTML = "";
+      coverWrap.appendChild(ui.el("div", "width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:#5c6370;font-size:0.78em;", "No cover"));
+    }
+
+    function makeSceneTag(label) {
+      return ui.el("span", sceneTagStyle, `Scene ${label}`);
+    }
+
+    function appendSourceTags(target, sources) {
+      (sources || []).forEach(label => target.appendChild(makeSceneTag(label)));
+    }
+
     function renderCurrent() {
       const token = ++renderToken;
       const hasPlans = planList.length > 0;
       empty.style.display = hasPlans ? "none" : "block";
+      hero.style.display = hasPlans ? "flex" : "none";
+      fieldsWrap.style.display = hasPlans ? "block" : "none";
       counter.style.display = hasPlans && planList.length > 1 ? "block" : "none";
-      summary.style.display = hasPlans ? "block" : "none";
       fieldsWrap.innerHTML = "";
-      coverWrap.innerHTML = "";
       summary.innerHTML = "";
+      setPosterPlaceholder();
 
       prevBtn.disabled = !hasPlans || index <= 0;
       nextBtn.disabled = !hasPlans || index >= planList.length - 1;
@@ -192,7 +209,7 @@
 
       if (!hasPlans) return;
 
-      counter.textContent = `Group ${index + 1} of ${planList.length}`;
+      counter.textContent = `${index + 1} / ${planList.length}`;
       const plan = planList[index];
       const sources = plan.sources || [];
       const preview = actions.formatMergedScenePreview(plan.keeper, sources);
@@ -200,51 +217,68 @@
         ? `#${preview.keeperId} ${preview.keeperTitle}`
         : `#${preview.keeperId}`;
 
-      summary.appendChild(document.createTextNode(`Destination: ${keepLabel}`));
-      summary.appendChild(document.createElement("br"));
-      summary.appendChild(document.createTextNode(
-        `Would merge ${preview.sourceCount} source scene(s).`
-      ));
-      const fileStatus = ui.el("div", "color:#abb2bf;margin-top:4px;", "Checking destination file…");
-      summary.appendChild(fileStatus);
+      summary.appendChild(ui.el("div", "color:#e6e6e6;font-weight:700;font-size:1.05em;line-height:1.3;word-break:break-word;", keepLabel));
+
+      const sceneList = ui.el("div", "display:flex;flex-direction:column;gap:4px;");
+      (preview.scenes || []).forEach(scene => {
+        const row = ui.el("div", "display:flex;align-items:center;gap:8px;min-width:0;");
+        row.appendChild(makeSceneTag(scene.label));
+        const name = scene.title ? `#${scene.id} ${scene.title}` : `#${scene.id}`;
+        row.appendChild(ui.el("div", "min-width:0;color:#abb2bf;font-size:0.8em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;", name));
+        sceneList.appendChild(row);
+      });
+      summary.appendChild(sceneList);
+
+      const pathRow = ui.el("div", "display:flex;flex-direction:column;gap:3px;margin-top:2px;");
+      pathRow.appendChild(ui.el("div", "color:#9aa3b2;font-size:0.72em;font-weight:600;letter-spacing:0.04em;text-transform:uppercase;", "Kept file"));
+      const pathValue = ui.el("div", "color:#abb2bf;font-size:0.8em;line-height:1.35;word-break:break-all;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;", "Checking…");
+      pathRow.appendChild(pathValue);
+      summary.appendChild(pathRow);
+
+      const chips = ui.el("div", "display:flex;flex-wrap:wrap;gap:6px;");
+      const fileChip = ui.el("span", metaChipStyle, "Checking files…");
+      chips.appendChild(fileChip);
+      summary.appendChild(chips);
+
       actions.prepareMergeFilePlan(api, plan.keeper, sources).then(filePlan => {
         if (token !== renderToken) return;
-        fileStatus.textContent = filePlan.deleteSourceFiles
-          ? `Would delete ${preview.sourceFileCount} source file(s) because the destination file is available.`
-          : `Would keep ${preview.sourceFileCount} transferred source file(s) because the destination has no available file.`;
-      }).catch(error => {
-        if (token === renderToken) fileStatus.textContent = `Unable to check destination file: ${error.message}`;
+        fileChip.textContent = filePlan.deleteSourceFiles
+          ? `Delete ${preview.sourceFileCount} file${preview.sourceFileCount === 1 ? "" : "s"}`
+          : `Keep ${preview.sourceFileCount} file${preview.sourceFileCount === 1 ? "" : "s"}`;
+        fileChip.style.borderColor = filePlan.deleteSourceFiles ? "#e06c75" : "#98c379";
+        fileChip.style.color = filePlan.deleteSourceFiles ? "#e06c75" : "#98c379";
+        if (filePlan.keptFilePath) {
+          pathValue.textContent = filePlan.keptFilePath;
+          if (filePlan.keptSceneLabel) {
+            const pathMeta = ui.el("div", "display:flex;align-items:center;gap:6px;");
+            pathMeta.appendChild(makeSceneTag(filePlan.keptSceneLabel));
+            pathMeta.appendChild(ui.el("span", "color:#9aa3b2;font-size:0.75em;", "primary after merge"));
+            pathRow.appendChild(pathMeta);
+          }
+        } else {
+          pathValue.textContent = "No file path available";
+        }
+      }).catch(() => {
+        if (token !== renderToken) return;
+        fileChip.textContent = "Files unknown";
+        pathValue.textContent = "Unable to resolve kept file";
       });
-      if (sources.length) {
-        summary.appendChild(document.createElement("br"));
-        summary.appendChild(document.createTextNode(
-          "Sources: " + sources.map(scene => `#${scene.id}${scene.title ? " " + scene.title : ""}`).join(", ")
-        ));
-      }
 
-      coverWrap.appendChild(ui.el("div", "color:#61afef;font-weight:600;margin-bottom:6px;", "Cover image"));
-      const coverStatus = ui.el("div", STYLE.hintText + "font-size:0.84em;", "Loading image for preview…");
-      coverWrap.appendChild(coverStatus);
       actions.prepareMergedSceneCover(api, plan.keeper, sources).then(cover => {
         if (token !== renderToken) return;
-        if (cover.status === "unavailable") {
-          coverStatus.textContent = `No cover can be copied. ${cover.message}`;
+        if (cover.status === "unavailable" || !cover.dataUrl) {
+          setPosterPlaceholder();
           return;
         }
-        coverStatus.textContent = cover.status === "copy"
-          ? `Would copy the cover from scene #${cover.sceneId}.${cover.keeperError ? ` Keeper image unavailable: ${cover.keeperError}` : ""}`
-          : `Keeping the cover from scene #${cover.sceneId}.`;
+        coverWrap.innerHTML = "";
         const image = document.createElement("img");
         image.src = cover.dataUrl;
-        image.alt = `Decoded cover image from scene #${cover.sceneId}`;
-        image.style.cssText = "display:block;max-width:100%;max-height:260px;object-fit:contain;margin-top:8px;border:1px solid #3e4451;";
-        image.onerror = () => { coverStatus.textContent = "The downloaded data URL could not be displayed as an image."; };
+        image.alt = "Scene cover";
+        image.style.cssText = "display:block;width:100%;height:100%;object-fit:cover;object-position:center top;";
+        image.onerror = () => { if (token === renderToken) setPosterPlaceholder(); };
         coverWrap.appendChild(image);
-        const mime = cover.dataUrl.slice(5, cover.dataUrl.indexOf(";base64,"));
-        coverWrap.appendChild(ui.el("div", STYLE.hintText + "font-size:0.78em;margin-top:5px;", `${mime} · ${cover.dataUrl.length.toLocaleString()} data URL characters`));
-        coverWrap.appendChild(ui.el("code", STYLE.hintText + "display:block;font-size:0.72em;word-break:break-all;", `${cover.dataUrl.slice(0, 64)}…`));
-      }).catch(error => {
-        if (token === renderToken) coverStatus.textContent = `Unable to preview cover: ${error.message}`;
+      }).catch(() => {
+        if (token === renderToken) setPosterPlaceholder();
       });
 
       if (!preview.fields.length) {
@@ -252,11 +286,31 @@
         return;
       }
 
-      const table = ui.el("table", STYLE.table);
-      preview.fields.forEach(field => {
+      const table = ui.el("table", STYLE.table + "background:#21252b;border:1px solid #3e4451;border-radius:6px;overflow:hidden;");
+      preview.fields.forEach((field, fieldIndex) => {
         const row = document.createElement("tr");
-        row.appendChild(ui.el("td", STYLE.td + "width:26%;color:#61afef;font-weight:600;white-space:nowrap;", field.label));
-        row.appendChild(ui.el("td", STYLE.td + "white-space:normal;word-break:break-word;", field.value));
+        const border = fieldIndex === preview.fields.length - 1 ? "border-bottom:none;" : "border-bottom:1px solid #2c313a;";
+        row.appendChild(ui.el("td", STYLE.td + `width:110px;color:#61afef;font-weight:600;white-space:nowrap;vertical-align:top;${border}`, field.label));
+
+        const valueCell = ui.el("td", STYLE.td + `white-space:normal;word-break:break-word;line-height:1.45;${border}`);
+        const items = field.items && field.items.length
+          ? field.items
+          : [{ text: field.value, sources: field.sources || [] }];
+        if (items.length === 1 && !(items[0].sources || []).length) {
+          valueCell.textContent = items[0].text;
+        } else {
+          const list = ui.el("div", "display:flex;flex-direction:column;gap:6px;");
+          items.forEach(item => {
+            const itemRow = ui.el("div", "display:flex;align-items:flex-start;gap:8px;flex-wrap:wrap;");
+            const tags = ui.el("div", "display:flex;flex-wrap:wrap;gap:4px;flex-shrink:0;padding-top:1px;");
+            appendSourceTags(tags, item.sources);
+            itemRow.appendChild(tags);
+            itemRow.appendChild(ui.el("div", "min-width:0;flex:1;", item.text));
+            list.appendChild(itemRow);
+          });
+          valueCell.appendChild(list);
+        }
+        row.appendChild(valueCell);
         table.appendChild(row);
       });
       fieldsWrap.appendChild(table);

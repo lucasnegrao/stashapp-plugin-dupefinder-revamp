@@ -120,87 +120,196 @@
     return null;
   }
 
+  function sceneLetter(index) {
+    let n = Number(index);
+    if (!Number.isFinite(n) || n < 0) return "?";
+    let label = "";
+    do {
+      label = String.fromCharCode(65 + (n % 26)) + label;
+      n = Math.floor(n / 26) - 1;
+    } while (n >= 0);
+    return label;
+  }
+
+  function uniqueSourceLabels(indexes) {
+    const seen = new Set();
+    const labels = [];
+    (indexes || []).forEach(index => {
+      const label = sceneLetter(index);
+      if (seen.has(label)) return;
+      seen.add(label);
+      labels.push(label);
+    });
+    return labels;
+  }
+
+  function firstPopulatedEntry(scenes, readValue) {
+    for (let i = 0; i < scenes.length; i++) {
+      const value = readValue(scenes[i]);
+      if (!isEmptyScalar(value)) return { value, sceneIndex: i };
+    }
+    return undefined;
+  }
+
+  function unionEntries(scenes, readItems, keyFor) {
+    const seen = new Set();
+    const result = [];
+    scenes.forEach((scene, sceneIndex) => {
+      (readItems(scene) || []).forEach(item => {
+        const key = keyFor(item);
+        if (seen.has(key)) return;
+        seen.add(key);
+        result.push({ item, sceneIndex });
+      });
+    });
+    return result;
+  }
+
+  function findFileAcrossScenes(scenes, fileId) {
+    if (fileId === null || fileId === undefined) return null;
+    for (let i = 0; i < scenes.length; i++) {
+      const files = scenes[i].files || [];
+      for (let j = 0; j < files.length; j++) {
+        if (String(files[j].id) === String(fileId)) {
+          return { file: files[j], scene: scenes[i], sceneIndex: i };
+        }
+      }
+    }
+    return null;
+  }
+
   function formatMergedScenePreview(keeper, sources) {
     const values = buildMergedSceneValues(keeper, sources);
     const scenes = [keeper].concat(sources || []);
     const fields = [];
+    const sceneRefs = scenes.map((scene, index) => ({
+      label: sceneLetter(index),
+      id: String(scene.id),
+      title: scene.title || null,
+      role: index === 0 ? "keeper" : "source",
+    }));
 
-    function addField(label, value) {
-      if (value === undefined || value === null) return;
-      if (Array.isArray(value) && value.length === 0) return;
+    function addScalarField(label, readValue, formatValue) {
+      const entry = firstPopulatedEntry(scenes, readValue);
+      if (!entry) return;
+      const display = formatValue ? formatValue(entry.value, entry.sceneIndex) : String(entry.value);
       fields.push({
         label,
-        value: Array.isArray(value) ? value.join(", ") : String(value),
+        value: display,
+        items: [{ text: display, sources: [sceneLetter(entry.sceneIndex)] }],
+        sources: [sceneLetter(entry.sceneIndex)],
       });
     }
 
-    addField("Title", values.title);
-    addField("Code", values.code);
-    addField("Details", values.details);
-    addField("Director", values.director);
-    addField("Date", values.date);
-    addField("Rating", values.rating100);
+    function addFixedField(label, display, sceneIndex) {
+      fields.push({
+        label,
+        value: display,
+        items: [{ text: display, sources: [sceneLetter(sceneIndex)] }],
+        sources: [sceneLetter(sceneIndex)],
+      });
+    }
+
+    function addUnionField(label, entries, formatItem) {
+      if (!entries.length) return;
+      const items = entries.map(entry => ({
+        text: formatItem(entry.item, entry.sceneIndex),
+        sources: [sceneLetter(entry.sceneIndex)],
+      }));
+      fields.push({
+        label,
+        value: items.map(item => item.text).join(", "),
+        items,
+        sources: uniqueSourceLabels(entries.map(entry => entry.sceneIndex)),
+      });
+    }
+
+    addScalarField("Title", scene => scene.title);
+    addScalarField("Code", scene => scene.code);
+    addScalarField("Details", scene => scene.details);
+    addScalarField("Director", scene => scene.director);
+    addScalarField("Date", scene => scene.date);
+    addScalarField("Rating", scene => scene.rating100);
 
     if (values.studio_id !== undefined) {
-      const studioName = lookupName(
-        scenes,
-        values.studio_id,
-        scene => (scene.studio ? [scene.studio] : []),
-        studio => studio.id,
-        studio => studio.name
+      addScalarField(
+        "Studio",
+        scene => {
+          if (!scene.studio || scene.studio.id === null || scene.studio.id === undefined) return null;
+          return String(scene.studio.id);
+        },
+        studioId => {
+          const studioName = lookupName(
+            scenes,
+            studioId,
+            scene => (scene.studio ? [scene.studio] : []),
+            studio => studio.id,
+            studio => studio.name
+          );
+          return studioName ? studioName + " (#" + studioId + ")" : "#" + studioId;
+        }
       );
-      addField("Studio", studioName ? studioName + " (#" + values.studio_id + ")" : "#" + values.studio_id);
     }
 
-    addField("Organized", values.organized ? "Yes" : "No");
+    addFixedField("Organized", values.organized ? "Yes" : "No", 0);
 
-    if (values.urls) addField("URLs", values.urls);
+    addUnionField(
+      "URLs",
+      unionEntries(scenes, scene => scene.urls || [], url => String(url).trim()),
+      url => String(url)
+    );
 
-    if (values.performer_ids) {
-      addField("Performers", values.performer_ids.map(id => {
-        const name = lookupName(scenes, id, scene => scene.performers, item => item.id, item => item.name);
-        return name || "#" + id;
-      }));
-    }
+    addUnionField(
+      "Performers",
+      unionEntries(scenes, scene => scene.performers || [], item => String(item.id)),
+      item => lookupName(scenes, item.id, scene => scene.performers, entry => entry.id, entry => entry.name) || "#" + item.id
+    );
 
-    if (values.tag_ids) {
-      addField("Tags", values.tag_ids.map(id => {
-        const name = lookupName(scenes, id, scene => scene.tags, item => item.id, item => item.name);
-        return name || "#" + id;
-      }));
-    }
+    addUnionField(
+      "Tags",
+      unionEntries(scenes, scene => scene.tags || [], item => String(item.id)),
+      item => lookupName(scenes, item.id, scene => scene.tags, entry => entry.id, entry => entry.name) || "#" + item.id
+    );
 
-    if (values.gallery_ids) {
-      addField("Galleries", values.gallery_ids.map(id => {
-        const name = lookupName(scenes, id, scene => scene.galleries, item => item.id, item => item.title);
-        return name || "#" + id;
-      }));
-    }
+    addUnionField(
+      "Galleries",
+      unionEntries(scenes, scene => scene.galleries || [], item => String(item.id)),
+      item => lookupName(scenes, item.id, scene => scene.galleries, entry => entry.id, entry => entry.title) || "#" + item.id
+    );
 
-    if (values.groups) {
-      addField("Groups", values.groups.map(entry => {
+    addUnionField(
+      "Groups",
+      unionEntries(scenes, scene => scene.groups || [], item => String(item.group.id)),
+      item => {
         const name = lookupName(
           scenes,
-          entry.group_id,
+          item.group.id,
           scene => scene.groups,
-          item => item.group.id,
-          item => item.group.name
+          entry => entry.group.id,
+          entry => entry.group.name
         );
-        const label = name || "#" + entry.group_id;
-        return entry.scene_index === undefined || entry.scene_index === null
-          ? label
-          : label + " (index " + entry.scene_index + ")";
-      }));
-    }
+        const groupLabel = name || "#" + item.group.id;
+        return item.scene_index === undefined || item.scene_index === null
+          ? groupLabel
+          : groupLabel + " (index " + item.scene_index + ")";
+      }
+    );
 
-    if (values.stash_ids) {
-      addField("Stash IDs", values.stash_ids.map(entry => entry.endpoint + " → " + entry.stash_id));
-    }
+    addUnionField(
+      "Stash IDs",
+      unionEntries(
+        scenes,
+        scene => scene.stash_ids || [],
+        entry => String(entry.endpoint) + "\0" + String(entry.stash_id)
+      ),
+      entry => entry.endpoint + " → " + entry.stash_id
+    );
 
     const sourceList = sources || [];
     return {
       values,
       fields,
+      scenes: sceneRefs,
       keeperId: String(keeper.id),
       keeperTitle: keeper.title || null,
       sourceCount: sourceList.length,
@@ -241,11 +350,33 @@
     };
   }
 
+  function describeKeptFile(file, scene, sceneIndex) {
+    if (!file) {
+      return {
+        keptFileId: null,
+        keptFilePath: null,
+        keptSceneId: scene ? String(scene.id) : null,
+        keptSceneLabel: sceneIndex === null || sceneIndex === undefined ? null : sceneLetter(sceneIndex),
+      };
+    }
+    return {
+      keptFileId: file.id,
+      keptFilePath: file.path || file.basename || null,
+      keptSceneId: scene ? String(scene.id) : null,
+      keptSceneLabel: sceneIndex === null || sceneIndex === undefined ? null : sceneLetter(sceneIndex),
+    };
+  }
+
   async function prepareMergeFilePlan(api, keeper, sources) {
+    const scenes = [keeper].concat(sources || []);
     const keeperFiles = keeper.files || [];
     if (keeperFiles.length && keeper.paths && keeper.paths.stream &&
         await api.isSceneStreamAvailable(keeper.paths.stream)) {
-      return { deleteSourceFiles: true, replacementFileId: null };
+      return {
+        deleteSourceFiles: true,
+        replacementFileId: null,
+        ...describeKeptFile(keeperFiles[0], keeper, 0),
+      };
     }
 
     const firstSourceFile = (sources || []).flatMap(scene => scene.files || [])[0];
@@ -258,11 +389,22 @@
         break;
       }
     }
+    const replacementFileIdFinal = keeperFiles.length || (firstSourceFile && replacementFileId !== firstSourceFile.id)
+      ? replacementFileId
+      : null;
+    const keptMatch = findFileAcrossScenes(
+      scenes,
+      replacementFileIdFinal !== null ? replacementFileIdFinal : (firstSourceFile && firstSourceFile.id)
+    ) || (keeperFiles[0] ? { file: keeperFiles[0], scene: keeper, sceneIndex: 0 } : null);
+
     return {
       deleteSourceFiles: false,
-      replacementFileId: keeperFiles.length || (firstSourceFile && replacementFileId !== firstSourceFile.id)
-        ? replacementFileId
-        : null,
+      replacementFileId: replacementFileIdFinal,
+      ...describeKeptFile(
+        keptMatch && keptMatch.file,
+        keptMatch && keptMatch.scene,
+        keptMatch ? keptMatch.sceneIndex : null
+      ),
     };
   }
 

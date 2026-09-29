@@ -118,7 +118,14 @@ test("duplicate merge selects an available source file over a missing one", asyn
     ]);
 
   assert.deepEqual(checked, ["/scene/10/stream", "/scene/11/stream", "/scene/12/stream"]);
-  assert.deepEqual(clone(plan), { deleteSourceFiles: false, replacementFileId: "good-source" });
+  assert.deepEqual(clone(plan), {
+    deleteSourceFiles: false,
+    replacementFileId: "good-source",
+    keptFileId: "good-source",
+    keptFilePath: null,
+    keptSceneId: "12",
+    keptSceneLabel: "C",
+  });
 });
 
 test("duplicate merge copies the first available source cover when keeper has none", async () => {
@@ -573,16 +580,82 @@ test("formatMergedScenePreview resolves names for display", () => {
   assert.equal(preview.sourceCount, 1);
   assert.equal(preview.sourceFileCount, 2);
   assert.equal(Object.prototype.hasOwnProperty.call(preview, "coverUrl"), false);
+  assert.deepEqual(clone(preview.scenes), [
+    { label: "A", id: "10", title: "Keeper title", role: "keeper" },
+    { label: "B", id: "11", title: "Source title", role: "source" },
+  ]);
   assert.deepEqual(clone(preview.fields), [
-    { label: "Title", value: "Keeper title" },
-    { label: "Details", value: "Source details" },
-    { label: "Studio", value: "Studio X (#3)" },
-    { label: "Organized", value: "No" },
-    { label: "URLs", value: "https://example.com/scene" },
-    { label: "Performers", value: "Alex, Blake" },
-    { label: "Tags", value: "Tag A, Tag B" },
-    { label: "Galleries", value: "Gallery A, Gallery B" },
-    { label: "Groups", value: "Group A (index 1), Group B" },
-    { label: "Stash IDs", value: "https://stashdb.org → abc" },
+    {
+      label: "Title",
+      value: "Keeper title",
+      items: [{ text: "Keeper title", sources: ["A"] }],
+      sources: ["A"],
+    },
+    {
+      label: "Details",
+      value: "Source details",
+      items: [{ text: "Source details", sources: ["B"] }],
+      sources: ["B"],
+    },
+    {
+      label: "Studio",
+      value: "Studio X (#3)",
+      items: [{ text: "Studio X (#3)", sources: ["B"] }],
+      sources: ["B"],
+    },
+    {
+      label: "Organized",
+      value: "No",
+      items: [{ text: "No", sources: ["A"] }],
+      sources: ["A"],
+    },
+    {
+      label: "URLs",
+      value: "https://example.com/scene",
+      items: [{ text: "https://example.com/scene", sources: ["B"] }],
+      sources: ["B"],
+    },
+    {
+      label: "Performers",
+      value: "Alex, Blake",
+      items: [
+        { text: "Alex", sources: ["A"] },
+        { text: "Blake", sources: ["B"] },
+      ],
+      sources: ["A", "B"],
+    },
+    {
+      label: "Tags",
+      value: "Tag A, Tag B",
+      items: [
+        { text: "Tag A", sources: ["A"] },
+        { text: "Tag B", sources: ["B"] },
+      ],
+      sources: ["A", "B"],
+    },
+    {
+      label: "Galleries",
+      value: "Gallery A, Gallery B",
+      items: [
+        { text: "Gallery A", sources: ["A"] },
+        { text: "Gallery B", sources: ["B"] },
+      ],
+      sources: ["A", "B"],
+    },
+    {
+      label: "Groups",
+      value: "Group A (index 1), Group B",
+      items: [
+        { text: "Group A (index 1)", sources: ["A"] },
+        { text: "Group B", sources: ["B"] },
+      ],
+      sources: ["A", "B"],
+    },
+    {
+      label: "Stash IDs",
+      value: "https://stashdb.org → abc",
+      items: [{ text: "https://stashdb.org → abc", sources: ["B"] }],
+      sources: ["B"],
+    },
   ]);
 });
