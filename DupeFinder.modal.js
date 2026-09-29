@@ -236,6 +236,23 @@
       refreshMergedGroupState(group, mergedKeeper);
     }
 
+    let mergePreviewOverlay = null;
+    function showMergePreview(plans) {
+      const shell = document.getElementById(constants.MODAL_ID);
+      if (!shell) return;
+      const modalPanel = shell.firstElementChild;
+      if (!modalPanel) return;
+      if (mergePreviewOverlay && mergePreviewOverlay.isConnected) mergePreviewOverlay.remove();
+      mergePreviewOverlay = tables.renderMergePreviewModal({
+        plans,
+        onClose() {
+          if (mergePreviewOverlay && mergePreviewOverlay.parentNode) mergePreviewOverlay.remove();
+          mergePreviewOverlay = null;
+        },
+      });
+      modalPanel.appendChild(mergePreviewOverlay);
+    }
+
     async function executeSplitScene(scene, keeper, splitFiles) {
       if (keeper) {
         await api.setScenePrimaryFile(scene.id, keeper.id);
@@ -413,15 +430,7 @@
       }
 
       if (state.dryRun) {
-        ui.previewAction(`Merge duplicates into ${keepTitle}`, [
-          `Would keep destination scene: ${keeper.title ? `#${keeper.id} ${keepTitle}` : keepTitle}`,
-          "",
-          `Would merge ${sources.length} source scene(s):`,
-          ...sources.map(scene => `- ${scene.title ? `#${scene.id} ${helpers.sceneName(scene)}` : helpers.sceneName(scene)}`),
-          "",
-          `Would delete ${sourceFiles.length} source file(s) from disk:`,
-          ...sourceFiles.map(file => `- ${helpers.filePathLabel(file)}`),
-        ]);
+        showMergePreview([{ keeper, sources }]);
         return;
       }
 
@@ -858,17 +867,10 @@
         }
 
         if (state.dryRun) {
-          const lines = [];
-          previewPlans.forEach(plan => {
-            lines.push(`Keep: #${plan.keeper.id} ${helpers.sceneName(plan.keeper)}`);
-            lines.push(`Merge ${plan.sources.length} source scene(s):`);
-            plan.sources.forEach(scene => lines.push(`- #${scene.id} ${helpers.sceneName(scene)}`));
-            const sourceFiles = plan.sources.flatMap(scene => scene.files || []);
-            lines.push(`Delete ${sourceFiles.length} source file(s) from disk:`);
-            sourceFiles.forEach(file => lines.push(`- ${helpers.filePathLabel(file)}`));
-            lines.push("");
-          });
-          ui.previewAction(`Batch merge for ${previewPlans.length} duplicate group(s)`, lines);
+          showMergePreview(previewPlans.map(plan => ({
+            keeper: plan.keeper,
+            sources: plan.sources,
+          })));
           return;
         }
 

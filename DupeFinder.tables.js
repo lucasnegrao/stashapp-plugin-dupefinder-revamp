@@ -1,7 +1,7 @@
 (function () {
   "use strict";
   const root = window.DupeFinder = window.DupeFinder || {};
-  const { ui, helpers, defaults, analysis, constants } = root;
+  const { ui, helpers, defaults, analysis, constants, actions } = root;
   const STYLE = defaults.style;
 
   function headerTable(columns) {
@@ -123,6 +123,107 @@
     actions.appendChild(docsLink);
     panel.append(actions, blockedWarning);
 
+    overlay.appendChild(panel);
+    overlay.addEventListener("click", event => { if (event.target === overlay) onClose(); });
+    return overlay;
+  }
+
+  function renderMergePreviewModal({ plans, onClose }) {
+    const planList = Array.isArray(plans) ? plans.filter(plan => plan && plan.keeper) : [];
+    let index = 0;
+
+    const overlay = ui.el("div", "position:absolute;inset:0;background:rgba(0,0,0,0.62);display:flex;align-items:center;justify-content:center;z-index:6;padding:20px;");
+    const panel = ui.el("div", "width:720px;max-width:96%;max-height:90%;overflow:auto;background:#2c313a;border:1px solid #3e4451;border-radius:8px;padding:16px;box-shadow:0 8px 32px rgba(0,0,0,0.5);");
+    panel.setAttribute("role", "dialog");
+    panel.setAttribute("aria-modal", "true");
+    panel.setAttribute("aria-labelledby", "df-merge-preview-title");
+
+    const header = ui.el("div", "display:flex;align-items:center;gap:10px;margin-bottom:12px;");
+    const title = ui.el("div", "color:#e5c07b;font-weight:700;font-size:1em;", "DRY RUN / PREVIEW — Merge metadata");
+    title.id = "df-merge-preview-title";
+    const closeBtn = ui.mkBtn("✕", "#3e4451", onClose);
+    closeBtn.title = "Close preview";
+    closeBtn.setAttribute("aria-label", "Close merge preview");
+    closeBtn.style.cssText += "margin-left:auto;width:34px;height:34px;padding:0;display:inline-flex;align-items:center;justify-content:center;";
+    header.append(title, closeBtn);
+    panel.appendChild(header);
+
+    const counter = ui.el("div", "color:#9aa3b2;font-size:0.82em;margin-bottom:10px;");
+    const summary = ui.el("div", "color:#abb2bf;font-size:0.84em;line-height:1.5;margin-bottom:12px;");
+    const fieldsWrap = ui.el("div", "");
+    const empty = ui.el("div", STYLE.hintText + "font-size:0.88em;", "No merge plans to preview.");
+    panel.append(counter, summary, fieldsWrap, empty);
+
+    const footer = ui.el("div", "display:flex;align-items:center;gap:8px;margin-top:14px;");
+    const prevBtn = ui.mkBtn("← Prev", "#3e4451", () => {
+      if (index <= 0) return;
+      index -= 1;
+      renderCurrent();
+    });
+    const nextBtn = ui.mkBtn("Next →", "#61afef", () => {
+      if (index >= planList.length - 1) return;
+      index += 1;
+      renderCurrent();
+    });
+    const doneBtn = ui.mkBtn("Close", "#98c379", onClose);
+    footer.append(prevBtn, nextBtn);
+    const spacer = ui.el("div", "flex:1;");
+    footer.append(spacer, doneBtn);
+    panel.appendChild(footer);
+
+    function renderCurrent() {
+      const hasPlans = planList.length > 0;
+      empty.style.display = hasPlans ? "none" : "block";
+      counter.style.display = hasPlans && planList.length > 1 ? "block" : "none";
+      summary.style.display = hasPlans ? "block" : "none";
+      fieldsWrap.innerHTML = "";
+      summary.innerHTML = "";
+
+      prevBtn.disabled = !hasPlans || index <= 0;
+      nextBtn.disabled = !hasPlans || index >= planList.length - 1;
+      prevBtn.style.opacity = prevBtn.disabled ? "0.45" : "1";
+      nextBtn.style.opacity = nextBtn.disabled ? "0.45" : "1";
+      prevBtn.style.display = planList.length > 1 ? "" : "none";
+      nextBtn.style.display = planList.length > 1 ? "" : "none";
+
+      if (!hasPlans) return;
+
+      counter.textContent = `Group ${index + 1} of ${planList.length}`;
+      const plan = planList[index];
+      const sources = plan.sources || [];
+      const preview = actions.formatMergedScenePreview(plan.keeper, sources);
+      const keepLabel = preview.keeperTitle
+        ? `#${preview.keeperId} ${preview.keeperTitle}`
+        : `#${preview.keeperId}`;
+
+      summary.appendChild(document.createTextNode(`Destination: ${keepLabel}`));
+      summary.appendChild(document.createElement("br"));
+      summary.appendChild(document.createTextNode(
+        `Would merge ${preview.sourceCount} source scene(s) and permanently delete ${preview.sourceFileCount} source file(s).`
+      ));
+      if (sources.length) {
+        summary.appendChild(document.createElement("br"));
+        summary.appendChild(document.createTextNode(
+          "Sources: " + sources.map(scene => `#${scene.id}${scene.title ? " " + scene.title : ""}`).join(", ")
+        ));
+      }
+
+      if (!preview.fields.length) {
+        fieldsWrap.appendChild(ui.el("div", STYLE.hintText + "font-size:0.84em;", "No descriptive metadata would be written for this merge."));
+        return;
+      }
+
+      const table = ui.el("table", STYLE.table);
+      preview.fields.forEach(field => {
+        const row = document.createElement("tr");
+        row.appendChild(ui.el("td", STYLE.td + "width:26%;color:#61afef;font-weight:600;white-space:nowrap;", field.label));
+        row.appendChild(ui.el("td", STYLE.td + "white-space:normal;word-break:break-word;", field.value));
+        table.appendChild(row);
+      });
+      fieldsWrap.appendChild(table);
+    }
+
+    renderCurrent();
     overlay.appendChild(panel);
     overlay.addEventListener("click", event => { if (event.target === overlay) onClose(); });
     return overlay;
@@ -456,6 +557,7 @@
   root.tables = {
     renderBatchBar,
     renderHelpModal,
+    renderMergePreviewModal,
     renderSettingsModal,
     renderMultiFileTable,
     renderDuplicatesTable,

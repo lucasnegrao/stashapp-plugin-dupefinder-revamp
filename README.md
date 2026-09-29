@@ -109,8 +109,17 @@ selection.
 The Duplicates tab displays groups produced by the active matching mode. Click
 a scene row to select the keeper.
 
-- **Merge** combines metadata into the selected keep scene.
-- Non-keeper scenes and all files belonging to them are then permanently deleted.
+- **Merge** keeps the selected scene as the destination and combines metadata
+  into it.
+- In **PREVIEW** mode, Merge opens a dialog showing the resulting destination
+  metadata. In batch preview, use **Prev** / **Next** to review each group.
+- Existing keeper metadata is retained. Empty keeper scalar fields are filled
+  from source scenes in order.
+- Multi-value metadata such as performers, tags, galleries, URLs, groups, and
+  stash IDs is combined without duplicates, with keeper values first.
+- Conflicting populated scalar values from source scenes are discarded.
+- Non-keeper scenes and all files belonging to them are then permanently
+  deleted.
 - Files already attached to the keep scene remain in place.
 - In Batch mode, exclude groups you do not want processed, then run Merge.
 

@@ -47,10 +47,21 @@
 
   function sceneFragment(includeFingerprints) {
     return `
-      id title date organized
+      id
+      title
+      code
+      details
+      director
+      urls
+      date
+      rating100
+      organized
       studio { id name }
+      galleries { id title }
       performers { id name }
+      groups { group { id name } scene_index }
       tags { id name }
+      stash_ids { endpoint stash_id }
       files {
         id path basename size video_codec height duration
         ${includeFingerprints ? "fingerprints { type value }" : ""}
@@ -171,12 +182,18 @@
         }
       `, { input: { id: String(id), delete_file: deleteFile } });
     },
-    async mergeScenes(sourceIds, destinationId) {
+    async mergeScenes(sourceIds, destinationId, values) {
       return gql(`
-        mutation MergeScenes($source: [ID!]!, $destination: ID!) {
-          sceneMerge(input: { source: $source, destination: $destination }) { id }
+        mutation MergeScenes($input: SceneMergeInput!) {
+          sceneMerge(input: $input) { id }
         }
-      `, { source: sourceIds.map(String), destination: String(destinationId) });
+      `, {
+        input: {
+          source: sourceIds.map(String),
+          destination: String(destinationId),
+          values,
+        },
+      });
     },
     async deleteFiles(fileIds) {
       return gql(`
